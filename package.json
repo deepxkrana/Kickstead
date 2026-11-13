@@ -1,0 +1,24 @@
+{
+  "name": "kickstead",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "database",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "db:generate": "npm run generate -w database",
+    "db:migrate": "npm run migrate:deploy -w database",
+    "db:migrate:dev": "npm run migrate:dev -w database",
+    "db:seed": "npm run seed -w database",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "typecheck": "npm run typecheck -w database -w backend -w frontend",
+    "test": "npm run test -w backend",
+    "build": "npm run build -w backend -w frontend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+
+/*
+ * Kickstead design tokens — mirrors DESIGN.md.
+ * Colour names match DESIGN.md exactly (bg-primary, text-on-surface, border-tertiary, ...).
+ * Spacing scale from DESIGN.md maps onto Tailwind's 4px grid:
+ *   xs 8px = 2 · sm 20px = 5 · md 30px = 7.5 · lg 38px = 9.5 · xl 50px = 12.5
+ */
+@theme {
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #000000;
+  --color-secondary: #ffffff;
+  --color-tertiary: #e5e7eb;
+  --color-neutral: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-on-surface: #000000;
+  --color-error: #ff0000;
+  --color-primary-80: #1a1a1a;
+  --color-primary-60: #4d4d4d;
+  --color-primary-40: #808080;
+  --color-primary-20: #cccccc;
+
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+}
+
+/* Typography scale from DESIGN.md */
+@utility text-headline-display {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+@utility text-headline-lg {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+@utility text-headline-md {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+@utility text-headline-sm {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+@utility text-body-lg {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+@utility text-body-md {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+@utility text-body-sm {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+@utility text-label-lg {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+@utility text-label-md {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+@utility text-label-sm {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+@utility text-caption {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/* Components from DESIGN.md: flat, no shadows, 4px corners, 40px controls. */
+@layer components {
+  .btn-primary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-label-md text-secondary uppercase transition-colors hover:bg-primary-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:bg-primary-40;
+  }
+  .btn-secondary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-md border border-primary bg-transparent px-4 text-label-md text-primary uppercase transition-colors hover:bg-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:border-primary-20 disabled:text-primary-40;
+  }
+  .btn-tertiary {
+    @apply inline-flex items-center gap-1 text-body-md text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary;
+  }
+  .card {
+    @apply rounded-lg border border-tertiary bg-surface p-4 text-on-surface;
+  }
+  .input {
+    @apply h-10 w-full rounded-md border border-primary-20 bg-surface px-3 text-body-md text-on-surface placeholder:text-primary-40 focus:border-primary focus:outline-none;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full bg-neutral px-3 py-1.5 text-label-sm text-primary uppercase;
+  }
+}
+
+@layer base {
+  html {
+    @apply bg-surface font-sans text-on-surface antialiased;
+  }
+}
