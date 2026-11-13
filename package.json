@@ -19,6 +19,6 @@
     "build": "npm run build -w backend -w frontend"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

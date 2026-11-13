@@ -8,7 +8,7 @@ The focus is on correctness rather than feature count:
 - Repeating a checkout request never creates a second order.
 - Every permission check runs on the server.
 
-> **Status: in progress.** Setup and the database are done (Phase 2 of 9). The Shop, Cart, Checkout, Orders and Admin pages are placeholders until their phases are built. See [Project status](#project-status).
+> **Status: in progress.** Setup, the database and sign-in are built (Phases 1–3 of 9). The Shop, Cart, Checkout, Orders and Admin pages are placeholders until their phases are built. See [Project status](#project-status).
 
 ---
 
@@ -19,7 +19,7 @@ The focus is on correctness rather than feature count:
 | Frontend | React 19, Vite 7, TypeScript, Tailwind CSS 4, React Router 7, TanStack Query 5 |
 | Backend | Node.js, Express 5, TypeScript, zod, Helmet |
 | Database | PostgreSQL on Supabase, Prisma 6 (ORM and migrations) |
-| Auth | Supabase Auth: Google sign-in, plus email/password for the demo accounts *(Phase 3)* |
+| Auth | Supabase Auth: Google sign-in, plus email/password for the demo accounts. The API verifies tokens with `jose`. |
 | Tests | Vitest, Supertest |
 | Deployment | Backend in Docker on AWS EC2, frontend on Vercel, deployed by GitHub Actions *(final phase)* |
 
@@ -36,13 +36,15 @@ kickstead/
 │   ├── src/
 │   │   ├── config/      Environment settings and pricing rules
 │   │   ├── db/          Prisma client
-│   │   ├── middleware/  Error handler, 404, request validation
-│   │   ├── modules/     Feature modules (health, auth, catalog, cart, checkout, orders, …)
+│   │   ├── middleware/  Auth (requireAuth / requireRole), error handler, 404, validation
+│   │   ├── modules/     Feature modules (health, auth, users, catalog, cart, checkout, orders, …)
+│   │   ├── routes/      Admin router (every route admin-only)
 │   │   └── shared/      Errors, money calculations, order status rules
 │   └── tests/
 ├── frontend/            React app
 │   └── src/
-│       ├── api/         Shared API client
+│       ├── api/         Shared API client (adds the login token to every request)
+│       ├── features/    Feature code (auth: provider, route guards, Google button)
 │       ├── layouts/     Store and admin layouts
 │       ├── pages/
 │       ├── routes/
@@ -56,8 +58,9 @@ kickstead/
 
 ### Prerequisites
 
-- Node.js 20 or later (developed on Node 24) and npm 10 or later
+- Node.js 22 or later (developed on Node 24) and npm 10 or later
 - A [Supabase](https://supabase.com) project (the free tier is enough)
+- A Google Cloud OAuth client, for Google sign-in (see step 3)
 
 ### 1. Install dependencies
 
@@ -74,34 +77,48 @@ Copy each example file and fill in the values:
 ```bash
 cp database/.env.example database/.env
 cp backend/.env.example  backend/.env
-cp frontend/.env.example frontend/.env   # optional; the defaults work locally
+cp frontend/.env.example frontend/.env
 ```
 
-To find the connection strings, open your Supabase project, click **Connect**, then choose **ORMs → Prisma**.
+Connection strings: in your Supabase project, click **Connect**, then choose **ORMs → Prisma**. API keys: **Project Settings → API Keys**.
 
 | File | Variable | Description |
 |---|---|---|
 | `database/.env` | `DATABASE_URL` | Transaction pooler, port **6543**. Add `?pgbouncer=true&connection_limit=1` to the end. |
 | `database/.env` | `DIRECT_URL` | Session pooler, port **5432**. Used for migrations. |
+| `database/.env` | `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `database/.env` | `SUPABASE_SECRET_KEY` | Secret key (`sb_secret_…`). Used **only** by the seed script to create the demo users. Never expose it to the browser. |
 | `backend/.env` | `DATABASE_URL` | Same value as `DATABASE_URL` in `database/.env`. |
 | `backend/.env` | `PORT` | API port. Default `4000`. |
 | `backend/.env` | `CLIENT_URL` | Browser origins allowed to call the API, comma-separated. Default `http://localhost:5173`. |
 | `backend/.env` | `NODE_ENV` | `development`, `test` or `production`. |
+| `backend/.env` | `SUPABASE_URL` | `https://<project-ref>.supabase.co`. Used to fetch Supabase's public signing keys. No secret needed. |
+| `backend/.env` | `ADMIN_EMAILS` | Comma-separated emails that get the `ADMIN` role on first sign-in. |
 | `frontend/.env` | `API_PROXY_TARGET` | Dev only: where Vite forwards `/api` requests. Default `http://localhost:4000`. |
+| `frontend/.env` | `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+| `frontend/.env` | `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`). Designed to be public; RLS keeps the data closed. |
 
 > If your database password contains `@`, `#`, `/`, `%`, `:` or `?`, URL-encode those characters (for example `@` → `%40`).
 >
 > `.env` files are gitignored. Never commit real credentials. Only the `.env.example` files belong in the repository.
 
-### 3. Set up the database
+### 3. Set up Supabase Auth
+
+1. **Google Cloud Console → APIs & Services:** configure the OAuth consent screen (External, and add test users). Then create an **OAuth client ID** of type *Web application*:
+   - Authorized JavaScript origin: `http://localhost:5173`
+   - Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+2. **Supabase → Authentication → Sign In / Providers:** enable **Google** with that client ID and secret. Keep **Email** enabled, because the demo accounts use it.
+3. **Supabase → Authentication → URL Configuration:** set Site URL to `http://localhost:5173` and add `http://localhost:5173/**` to Redirect URLs.
+
+### 4. Set up the database
 
 ```bash
 npm run db:generate   # generate the Prisma client
 npm run db:migrate    # apply all migrations
-npm run db:seed       # load categories and products (safe to run again)
+npm run db:seed       # load the catalogue and create the demo accounts (safe to run again)
 ```
 
-### 4. Run the app
+### 5. Run the app
 
 Use two terminals:
 
@@ -130,7 +147,7 @@ Run these from the repository root.
 | `npm run db:generate` | Generate the Prisma client from `database/prisma/schema.prisma` |
 | `npm run db:migrate` | Apply pending migrations (`prisma migrate deploy`) |
 | `npm run db:migrate:dev` | Create a new migration during development |
-| `npm run db:seed` | Load or refresh the catalogue seed data |
+| `npm run db:seed` | Load or refresh the catalogue, and create or reset the demo accounts |
 | `npm run dev:backend` | Start the API with auto-reload |
 | `npm run dev:frontend` | Start the Vite dev server |
 | `npm test` | Run the backend test suite |
@@ -143,12 +160,17 @@ Run these from the repository root.
 npm test
 ```
 
-Current tests cover:
+Current tests (52) cover:
 - **Pricing:** GST, the free-shipping threshold, tax rounding, and rejection of invalid amounts.
 - **Order statuses:** every allowed change succeeds and the disallowed ones are rejected.
 - **API errors:** the standard error format and security headers.
+- **Token verification:** uses real ES256 tokens signed with a throwaway key. Expired, wrong issuer, wrong audience, wrong key, HS256 and malformed tokens are all rejected.
+- **Authentication and roles:**
+  - Missing or bad token → `401`. Disabled account → `403`.
+  - On first sign-in, a user gets `ADMIN` if their email is in `ADMIN_EMAILS`, otherwise `CUSTOMER`.
+  - A customer calling an admin endpoint → `403`. An admin gets `200`.
 
-Database-backed tests (checkout, insufficient stock, duplicate checkout, permissions) are added in later phases. They run against a separate local PostgreSQL database, never against Supabase.
+Database-backed tests (checkout, insufficient stock, duplicate checkout, ownership) are added in later phases. They run against a separate local PostgreSQL database, never against Supabase.
 
 ---
 
@@ -184,6 +206,21 @@ Checkout has two steps:
 
 **Revenue** is the sum of order totals with status `PAID`, `PACKED`, `SHIPPED` or `DELIVERED`.
 
+### Authentication and roles
+
+```text
+Browser ──(Google OAuth or email/password)──▶ Supabase Auth ──▶ signed JWT (ES256)
+Browser ──(Authorization: Bearer <JWT>)────▶ Express API
+API: check signature against Supabase's public keys → check issuer, audience, expiry
+     → load or create the row in users → read role from the database → allow or deny
+```
+
+- Sign-up and sign-in happen in the browser through Supabase Auth. The API never sees a password.
+- Both sign-in methods produce the same kind of Supabase JWT. The API verifies it locally against Supabase's public signing keys, so it needs no shared secret.
+- The **role comes from our `users` table**, never from the token or the browser. On first sign-in a user becomes `ADMIN` if their email is in `ADMIN_EMAILS`, otherwise `CUSTOMER`. After that the database is the source of truth.
+- Every `/api/admin/*` route sits behind `requireAuth` + `requireRole('ADMIN')` at the router level. The frontend's route guards only control what pages are shown.
+- Deactivated accounts get `403 ACCOUNT_DISABLED`.
+
 ### Database safeguards
 
 The database itself enforces the critical rules, so a bug in the application can't break them:
@@ -216,7 +253,7 @@ Every error response has the same shape:
 |---|---|---|
 | 1 | Planning and decisions | ✅ Done |
 | 2 | Project setup, database schema, migrations, seed | ✅ Done |
-| 3 | Authentication and roles (Supabase Auth) | ⏳ Next |
+| 3 | Authentication and roles (Supabase Auth) | ✅ Built (Google sign-in awaiting first browser test) |
 | 4 | Catalogue and cart | Planned |
 | 5 | Checkout, simulated payment, orders | Planned |
 | 6 | Admin dashboard and operations | Planned |
@@ -224,7 +261,16 @@ Every error response has the same shape:
 | 8 | Database-backed tests | Planned |
 | 9 | API docs, ER diagram, deployment | Planned |
 
-**Demo credentials** for the admin and customer accounts will be listed here once Phase 3 adds them.
+## Demo credentials
+
+Created by `npm run db:seed`. These are dummy accounts for reviewers. Use **Demo login** on the sign-in page.
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@kickstead.dev` | `Kickstead@Demo1` |
+| Customer | `customer@kickstead.dev` | `Kickstead@Demo1` |
+
+The demo customer has a saved delivery address in Mumbai. Running the seed again resets both passwords to the values above.
 
 ## Known limitations
 
@@ -234,6 +280,9 @@ Every error response has the same shape:
 - An abandoned unpaid (`PLACED`) order keeps its stock reserved until the customer or an admin cancels it. Unpaid orders don't expire automatically.
 - Product images are external URLs (free Unsplash photos). There is no image upload.
 - Brand names in the seed data are fictional.
+- New accounts are created through Google only. Supabase can't turn off email sign-up for some providers and leave it on for others, so someone could create an email/password account through Supabase's API. It would only ever be a `CUSTOMER`.
+- The Supabase session (access and refresh tokens) is kept in browser storage by the Supabase client, not in an HTTP-only cookie. The API accepts it as a Bearer token.
+- Roles are assigned at first sign-in. Adding an email to `ADMIN_EMAILS` later doesn't promote an existing customer.
 
 ## Project documents
 

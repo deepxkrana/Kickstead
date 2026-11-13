@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router';
+import { useAuth } from '../features/auth/AuthProvider';
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard', end: true },
@@ -9,6 +10,8 @@ const adminNav = [
 ];
 
 export function AdminLayout() {
+  const { state, signOut } = useAuth();
+
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside className="bg-primary text-secondary md:w-60 md:shrink-0">
@@ -32,10 +35,24 @@ export function AdminLayout() {
               {item.label}
             </NavLink>
           ))}
-          <Link to="/" className="mt-auto rounded-md px-3 py-2 text-label-sm text-primary-20 uppercase hover:text-secondary">
+          <Link to="/" className="rounded-md px-3 py-2 text-label-sm whitespace-nowrap text-primary-20 uppercase hover:text-secondary md:mt-5">
             ← Back to store
           </Link>
         </nav>
+        {state.status === 'signedIn' && (
+          <div className="hidden border-t border-primary-80 px-5 py-4 md:block">
+            <p className="truncate text-body-sm" title={state.user.email}>
+              {state.user.name}
+            </p>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="mt-1 text-label-sm text-primary-20 uppercase hover:text-secondary"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
       <main className="flex-1 bg-neutral">
         <Outlet />

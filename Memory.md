@@ -17,7 +17,7 @@ Do not use this file as a replacement for source code, tests, or the product req
 | Delivery window | Deadline 2026-11-14 |
 | Primary users | Customer and Admin |
 | Product goal | Complete customer-to-order journey with safe inventory and admin operations |
-| Current phase | Phase 2 — Scaffold + database (complete). Next: Phase 3 — Auth |
+| Current phase | Phase 3 — Auth (built; awaiting user's browser test of Google sign-in) |
 | Last updated | 2026-11-13 |
 
 ---
@@ -135,15 +135,15 @@ None.
 
 ### Authentication
 
-- [ ] Customer registration.
-- [ ] Login.
-- [ ] Logout.
-- [ ] Current-user endpoint.
-- [ ] Password hashing.
-- [ ] Authentication middleware.
-- [ ] Admin role middleware.
-- [ ] Ownership checks.
-- [ ] Customer cannot access admin endpoints.
+- [x] Customer registration. (Google via Supabase; users row created on first API call)
+- [x] Login. (Google OAuth + demo email/password)
+- [x] Logout. (supabase.auth.signOut + query cache cleared)
+- [x] Current-user endpoint. (GET /api/auth/me)
+- [x] Password hashing. (handled by Supabase Auth; API never sees passwords)
+- [x] Authentication middleware. (requireAuth, JWKS-verified ES256)
+- [x] Admin role middleware. (requireRole; admin router protected at router level)
+- [ ] Ownership checks. (per-resource; added with addresses/cart/orders in Phases 4–5)
+- [x] Customer cannot access admin endpoints. (403, tested + verified with real tokens)
 
 ### Catalogue
 
@@ -183,7 +183,7 @@ None.
 - [ ] Admin order list.
 - [ ] Admin order detail.
 - [ ] Admin inventory update.
-- [ ] Admin customer list.
+- [x] Admin customer list. (GET /api/admin/customers API only; page in Phase 6)
 - [ ] Dashboard summary.
 - [ ] Audit log creation.
 - [ ] Audit log view.
@@ -196,11 +196,11 @@ None.
 - [ ] Duplicate-checkout test.
 - [ ] Failed-payment test.
 - [ ] Invalid-transition test.
-- [ ] Authorization test.
+- [x] Authorization test.
 - [ ] README.
 - [ ] API documentation.
 - [ ] ER diagram.
-- [ ] Demo credentials.
+- [x] Demo credentials. (seeded + in README)
 - [ ] Known limitations.
 - [ ] Clean database setup verified.
 - [ ] Production build verified.
@@ -215,21 +215,21 @@ Update this section after each phase.
 ### Last completed phase
 
 ```text
-Phase 1 — Planning (complete). Phase 2 — Scaffold + database (complete).
+Phase 1 — Planning (complete). Phase 2 — Scaffold + database (complete). Phase 3 — Auth (built, see log).
 ```
 
 ### Current work
 
 ```text
-None — waiting for the user to start Phase 3.
+Phase 3: waiting for the user to test Google sign-in + demo login in the browser.
 ```
 
 ### Next task
 
 ```text
-Phase 3 (Supabase Auth: Google + seeded email/password demo users, ADMIN_EMAILS, requireAuth/requireRole).
-Setup done (2026-11-13): publishable key in frontend/.env, secret key in database/.env (seed only), SUPABASE_URL in all three, ADMIN_EMAILS in backend/.env. Google provider enabled and verified. Project signs JWTs with ES256, so the backend verifies tokens via JWKS (no secret).
-Still to confirm during the first real login: Supabase redirect allow-list includes http://localhost:5173/**.
+1. User tests in browser: Google sign-in (deepakrrana5@gmail.com → should land on /admin), demo customer, demo admin, sign out.
+   This also confirms the Supabase redirect allow-list includes http://localhost:5173/**.
+2. Then Phase 4 — Catalogue and cart.
 ```
 
 ### Blockers
@@ -274,6 +274,46 @@ Next action:
 ### Phase history
 
 ```text
+## 2026-11-13 — Phase 3: Authentication and roles
+
+Status: complete (backend verified end-to-end with real Supabase tokens; Google UI flow pending user browser test)
+
+Setup (with user):
+- Keys: publishable → frontend/.env; secret → database/.env (seed only); SUPABASE_URL in all three. ADMIN_EMAILS=deepakrrana5@gmail.com,admin@kickstead.dev in backend/.env.
+- Google OAuth client created by user; Supabase Google provider verified ON; Google accepts client_id + redirect_uri.
+- Project JWT signing: ES256 (JWKS published) → backend needs no secret.
+
+Implemented:
+- backend: env SUPABASE_URL/ADMIN_EMAILS; tokenVerifier (jose, remote JWKS, issuer/audience 'authenticated'/expiry, asymmetric algs only, UUID sub + email required); auth.service (resolveUser: find or upsert users row, role from ADMIN_EMAILS on creation only, email sync, ACCOUNT_DISABLED); middleware/auth (requireAuth → 401 UNAUTHENTICATED/INVALID_TOKEN/TOKEN_EXPIRED, requireRole → 403 FORBIDDEN); GET /api/auth/me; admin router (requireAuth+requireRole at router level) with GET /api/admin/customers (paginated, q search); shared pagination helper; createApp({ tokenVerifier }) for test injection.
+- database seed: demo admin + customer created/updated in Supabase Auth (pre-confirmed, password reset each run), mirrored into users with same id and enforced role; demo customer gets a default Mumbai address.
+- frontend: supabase client (PKCE), AuthProvider (session + /api/auth/me role via TanStack Query), API client attaches Bearer token, RequireAuth / RequireAuth role=ADMIN guards (loading, redirect with return path, 403 view, disabled-account view), LoginPage (Google + demo login with fill buttons), RegisterPage (Google sign-up), /auth/callback, header account nav (name, Admin link, sign out), admin sidebar user + sign out, StateViews (LoadingState, MessageState, ErrorMessage).
+- Root engines node >=22 (supabase-js requirement). README updated (auth setup, env vars, demo credentials, auth flow, limitations).
+
+Files changed:
+- package.json, README.md, Memory.md, backend/.env.example, backend/vitest.config.ts, database/prisma/seed.ts
+- backend/src/{app.ts,config/env.ts,middleware/auth.ts,modules/auth/{tokenVerifier,auth.service,auth.routes}.ts,modules/users/{users.repository,users.schemas,users.controller}.ts,routes/admin.routes.ts,shared/http/pagination.ts}
+- backend/tests/{tokenVerifier,auth}.test.ts
+- frontend/src/{main.tsx,vite-env.d.ts,lib/supabase.ts,api/{client,authApi}.ts,features/auth/{AuthProvider,RequireAuth,GoogleButton}.tsx,features/auth/{types,returnTo}.ts,components/StateViews.tsx,pages/{LoginPage,RegisterPage,AuthCallbackPage}.tsx,layouts/{StoreLayout,AdminLayout}.tsx,routes/router.tsx}
+
+Validation:
+- npm run typecheck → pass; npm test → 52/52 pass; npm run build → pass (frontend chunk-size warning from supabase-js, non-blocking)
+- Seed run twice → demo users ready both times (idempotent)
+- Real Supabase password grant → ES256 tokens; local API: me(customer)=200 CUSTOMER, me(admin)=200 ADMIN, admin/customers(customer)=403, admin/customers(admin)=200, tampered token=401 INVALID_TOKEN, wrong password at Supabase=400
+- Dev servers: /login 200, Vite proxy /api/health ok, anon /api/auth/me 401, auth modules transform OK
+
+Decisions:
+- No /api/auth/register|login|logout endpoints: Supabase Auth handles them in the browser; API exposes /auth/me. (Deviation from PLAN.md contract; documented.)
+- Role assigned on user creation only; DB is the source of truth afterwards. Seed enforces demo roles.
+- Response convention: { data } for single resources, { data, meta: { page, limit, total, totalPages } } for lists.
+- Auth tests mock users.repository (in-memory); DB-backed auth tests in Phase 8.
+
+Known issues:
+- Frontend bundle ~592 kB (175 kB gzip), mostly supabase-js; code-split admin routes later.
+- Google flow + redirect allow-list not yet exercised in a real browser.
+
+Next action:
+- User browser test → Phase 4.
+
 ## 2026-11-13 — Phase 2: Scaffold + database
 
 Status: complete

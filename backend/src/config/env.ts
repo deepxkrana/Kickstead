@@ -13,6 +13,18 @@ const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter(Boolean),
     ),
+  SUPABASE_URL: z
+    .url('SUPABASE_URL must be a URL')
+    .transform((value) => value.replace(/\/+$/, '')),
+  ADMIN_EMAILS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -29,6 +41,8 @@ export const env = {
   port: parsed.data.PORT,
   databaseUrl: parsed.data.DATABASE_URL,
   clientOrigins: parsed.data.CLIENT_URL,
+  supabaseUrl: parsed.data.SUPABASE_URL,
+  adminEmails: parsed.data.ADMIN_EMAILS,
   isProduction: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
 } as const;

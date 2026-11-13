@@ -27,6 +27,14 @@ interface RequestOptions {
 
 const API_BASE = '/api';
 
+type AccessTokenProvider = () => Promise<string | null>;
+let getAccessToken: AccessTokenProvider = async () => null;
+
+/** Registered once at startup so every request carries the current session's access token. */
+export function setAccessTokenProvider(provider: AccessTokenProvider): void {
+  getAccessToken = provider;
+}
+
 function buildUrl(path: string, query?: RequestOptions['query']): string {
   const url = `${API_BASE}${path}`;
   if (!query) return url;
@@ -42,6 +50,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const { method = 'GET', body, query, signal } = options;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const token = await getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   let response: Response;
   try {

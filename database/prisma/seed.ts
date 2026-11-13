@@ -4,14 +4,36 @@
  * - Stock is set only when a product is first created (with a SEED inventory movement),
  *   so re-running the seed never silently overwrites stock changed by orders or admins.
  *
- * Demo users (admin + customer) and the customer's address are seeded in Phase 3,
- * because their ids must come from Supabase Auth.
+ * - Demo users are created in Supabase Auth (email/password, pre-confirmed) and mirrored
+ *   into our users table with the same id. Their password is reset to the documented
+ *   demo value on every run. Requires SUPABASE_URL + SUPABASE_SECRET_KEY; skipped otherwise.
  *
  * Brand names are fictional. Images are free Unsplash photos.
+ * Demo credentials are dummy values, published in the README on purpose.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Role } from '@prisma/client';
+import { createClient, type SupabaseClient, type User as AuthUser } from '@supabase/supabase-js';
 
 const prisma = new PrismaClient();
+
+const DEMO_PASSWORD = 'Kickstead@Demo1';
+
+const demoUsers: { email: string; name: string; role: Role }[] = [
+  { email: 'admin@kickstead.dev', name: 'Demo Admin', role: 'ADMIN' },
+  { email: 'customer@kickstead.dev', name: 'Demo Customer', role: 'CUSTOMER' },
+];
+
+const demoAddress = {
+  fullName: 'Demo Customer',
+  phone: '+91 98765 43210',
+  line1: '221 Linking Road',
+  line2: 'Flat 4B, Sea Breeze Apartments',
+  city: 'Mumbai',
+  state: 'Maharashtra',
+  postalCode: '400050',
+  country: 'India',
+  isDefault: true,
+};
 
 const img = (id: string) => `https://images.unsplash.com/photo-${id}?w=800&q=80`;
 
@@ -224,6 +246,69 @@ async function main() {
   console.log(
     `[seed] ${categories.length} categories upserted; products: ${created} created, ${updated} updated.`,
   );
+
+  await seedDemoUsers();
+}
+
+async function findAuthUserByEmail(supabase: SupabaseClient, email: string): Promise<AuthUser | null> {
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (match) return match;
+    if (data.users.length < 200) return null;
+  }
+}
+
+async function seedDemoUsers() {
+  const url = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) {
+    console.warn('[seed] SUPABASE_URL / SUPABASE_SECRET_KEY not set — skipping demo users.');
+    return;
+  }
+
+  const supabase = createClient(url, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  for (const demo of demoUsers) {
+    let authUser = await findAuthUserByEmail(supabase, demo.email);
+
+    if (authUser) {
+      const { error } = await supabase.auth.admin.updateUserById(authUser.id, {
+        password: DEMO_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: demo.name },
+      });
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: demo.email,
+        password: DEMO_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: demo.name },
+      });
+      if (error) throw error;
+      authUser = data.user;
+    }
+
+    // Mirror into our users table with the Supabase id. Demo roles are enforced on every run.
+    await prisma.user.upsert({
+      where: { id: authUser.id },
+      create: { id: authUser.id, email: demo.email, name: demo.name, role: demo.role },
+      update: { email: demo.email, name: demo.name, role: demo.role, isActive: true },
+    });
+
+    if (demo.role === 'CUSTOMER') {
+      const hasAddress = await prisma.address.count({ where: { userId: authUser.id } });
+      if (!hasAddress) {
+        await prisma.address.create({ data: { ...demoAddress, userId: authUser.id } });
+      }
+    }
+
+    console.log(`[seed] demo ${demo.role.toLowerCase()} ready: ${demo.email}`);
+  }
 }
 
 main()
