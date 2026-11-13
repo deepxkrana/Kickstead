@@ -1,4 +1,27 @@
 import { Link } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { catalogApi } from '../api/catalogApi';
+import { ProductCard, ProductGridSkeleton } from '../components/ProductCard';
+import { ErrorMessage } from '../components/StateViews';
+
+function FeaturedProducts() {
+  const featured = useQuery({
+    queryKey: ['products', { featured: true, limit: 4 }],
+    queryFn: () => catalogApi.products({ featured: true, limit: 4 }),
+  });
+
+  if (featured.isPending) return <ProductGridSkeleton count={4} />;
+  if (featured.isError) return <ErrorMessage>{featured.error.message}</ErrorMessage>;
+  if (featured.data.data.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      {featured.data.data.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
 
 export function HomePage() {
   return (
@@ -19,7 +42,18 @@ export function HomePage() {
           </div>
         </div>
       </section>
-      {/* Featured product grid is added in Phase 4 once the catalogue API exists. */}
+
+      <section className="mx-auto max-w-6xl px-4 py-12.5">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <h2 className="text-headline-md uppercase">
+            Featured <span className="underline decoration-error decoration-2 underline-offset-8">drops</span>
+          </h2>
+          <Link to="/products" className="btn-tertiary text-body-sm">
+            View all →
+          </Link>
+        </div>
+        <FeaturedProducts />
+      </section>
     </>
   );
 }

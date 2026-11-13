@@ -1,11 +1,26 @@
 import { NavLink, Outlet, Link } from 'react-router';
 import { useAuth } from '../features/auth/AuthProvider';
+import { useCart } from '../features/cart/useCart';
 
 const navItems = [
   { to: '/products', label: 'Shop' },
   { to: '/orders', label: 'Orders' },
-  { to: '/cart', label: 'Cart' },
 ];
+
+function CartLink() {
+  const cart = useCart();
+  const count = cart.data?.itemCount ?? 0;
+  return (
+    <NavLink to="/cart" className={navClass} aria-label={count ? `Cart, ${count} items` : 'Cart'}>
+      Cart
+      {count > 0 && (
+        <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-error px-1.5 text-label-sm text-secondary no-underline">
+          {count}
+        </span>
+      )}
+    </NavLink>
+  );
+}
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `text-label-sm sm:text-label-md uppercase whitespace-nowrap transition-colors hover:text-primary-20 ${
@@ -64,6 +79,7 @@ export function StoreLayout() {
                 {item.label}
               </NavLink>
             ))}
+            <CartLink />
             <AccountNav />
           </nav>
         </div>

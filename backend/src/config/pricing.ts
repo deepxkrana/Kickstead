@@ -14,3 +14,6 @@ export const PRICING = {
 
 /** Products at or below this stock level count as "low stock" on the admin dashboard. */
 export const LOW_STOCK_THRESHOLD = 5;
+
+/** Maximum quantity of a single product in one cart / order line. */
+export const MAX_QUANTITY_PER_ITEM = 10;

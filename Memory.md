@@ -17,7 +17,7 @@ Do not use this file as a replacement for source code, tests, or the product req
 | Delivery window | Deadline 2026-11-14 |
 | Primary users | Customer and Admin |
 | Product goal | Complete customer-to-order journey with safe inventory and admin operations |
-| Current phase | Phase 3 — Auth (built; awaiting user's browser test of Google sign-in) |
+| Current phase | Phase 5 — Checkout + orders (complete). Next: Phase 6 — Admin |
 | Last updated | 2026-11-13 |
 
 ---
@@ -142,59 +142,59 @@ None.
 - [x] Password hashing. (handled by Supabase Auth; API never sees passwords)
 - [x] Authentication middleware. (requireAuth, JWKS-verified ES256)
 - [x] Admin role middleware. (requireRole; admin router protected at router level)
-- [ ] Ownership checks. (per-resource; added with addresses/cart/orders in Phases 4–5)
+- [x] Ownership checks. (cart items, addresses, orders, payment, cancel → 404 for others; tested)
 - [x] Customer cannot access admin endpoints. (403, tested + verified with real tokens)
 
 ### Catalogue
 
-- [ ] Categories.
-- [ ] Product listing.
-- [ ] Product search.
-- [ ] Category filter.
-- [ ] Sorting.
-- [ ] Pagination.
-- [ ] Product detail.
+- [x] Categories.
+- [x] Product listing.
+- [x] Product search.
+- [x] Category filter.
+- [x] Sorting.
+- [x] Pagination.
+- [x] Product detail.
 - [ ] Admin product CRUD.
 - [ ] Admin category management.
 
 ### Cart and checkout
 
-- [ ] Persistent cart.
-- [ ] Add item.
-- [ ] Update quantity.
-- [ ] Remove item.
-- [ ] Clear cart.
-- [ ] Address CRUD or seeded address selection.
-- [ ] Server-side pricing.
-- [ ] Checkout transaction.
-- [ ] Stock recheck.
-- [ ] Non-negative stock protection.
-- [ ] Successful payment simulation.
-- [ ] Failed payment simulation.
-- [ ] Cancelled payment simulation.
-- [ ] Idempotency.
-- [ ] Order confirmation.
+- [x] Persistent cart.
+- [x] Add item.
+- [x] Update quantity.
+- [x] Remove item.
+- [x] Clear cart.
+- [x] Address CRUD or seeded address selection.
+- [x] Server-side pricing.
+- [x] Checkout transaction.
+- [x] Stock recheck.
+- [x] Non-negative stock protection.
+- [x] Successful payment simulation.
+- [x] Failed payment simulation.
+- [x] Cancelled payment simulation.
+- [x] Idempotency.
+- [x] Order confirmation.
 
 ### Orders and admin
 
-- [ ] Customer order history.
-- [ ] Customer order detail.
+- [x] Customer order history.
+- [x] Customer order detail.
 - [ ] Valid order transitions.
 - [ ] Admin order list.
 - [ ] Admin order detail.
 - [ ] Admin inventory update.
 - [x] Admin customer list. (GET /api/admin/customers API only; page in Phase 6)
 - [ ] Dashboard summary.
-- [ ] Audit log creation.
+- [ ] Audit log creation. (order created / payment / cancellation done; admin product/inventory/status in Phase 6)
 - [ ] Audit log view.
 
 ### Quality and delivery
 
 - [ ] Unit tests.
-- [ ] API/integration tests.
-- [ ] Insufficient-stock test.
-- [ ] Duplicate-checkout test.
-- [ ] Failed-payment test.
+- [ ] API/integration tests. (catalogue + cart done against local test DB; checkout/orders pending)
+- [x] Insufficient-stock test.
+- [x] Duplicate-checkout test.
+- [x] Failed-payment test.
 - [ ] Invalid-transition test.
 - [x] Authorization test.
 - [ ] README.
@@ -215,21 +215,19 @@ Update this section after each phase.
 ### Last completed phase
 
 ```text
-Phase 1 — Planning (complete). Phase 2 — Scaffold + database (complete). Phase 3 — Auth (built, see log).
+Phases 1–5 complete (planning, scaffold + database, auth, catalogue + cart, checkout + orders).
 ```
 
 ### Current work
 
 ```text
-Phase 3: waiting for the user to test Google sign-in + demo login in the browser.
+None — waiting for the user to start Phase 6.
 ```
 
 ### Next task
 
 ```text
-1. User tests in browser: Google sign-in (deepakrrana5@gmail.com → should land on /admin), demo customer, demo admin, sign out.
-   This also confirms the Supabase redirect allow-list includes http://localhost:5173/**.
-2. Then Phase 4 — Catalogue and cart.
+Phase 6 — Admin: dashboard (counts, revenue rule, low stock), products + categories CRUD/activate, stock adjustment (ADMIN_ADJUSTMENT movement + audit), orders list/search/detail, status transitions via assertTransition (+ admin cancel via cancelLockedOrder), customers page, audit log page. Code-split admin routes.
 ```
 
 ### Blockers
@@ -274,6 +272,56 @@ Next action:
 ### Phase history
 
 ```text
+## 2026-11-13 — Phase 5: Checkout, payment, orders
+
+Status: complete
+
+Implemented:
+- backend: audit.service (recordAudit in caller's tx; action constants), inventory.service (reserveStock: conditional decrement + ORDER_RESERVED movement; releaseStock: ORDER_RELEASED/ORDER_CANCELLED), addresses module (owner-scoped CRUD, first = default, single default, promote on delete, max 10, strict bodies, separate no-default update schema), PATCH /api/profile, POST /api/checkout (one interactive tx: address ownership → cart → SELECT … FOR UPDATE OF p ORDER BY id → idempotency re-check → pending PLACED check → availability/stock checks → DB-priced totals → order + snapshots + items + PENDING payment → reserveStock → audit; P2002 on idempotency → replay, on one-PLACED index → 409 PENDING_ORDER_EXISTS; 201 new / 200 + Idempotent-Replayed), orders: GET list/detail (owner), POST :id/payment (lock row; SUCCESS → PAID + SIM ref + remove ordered products from cart; FAILED/CANCELLED → release stock, keep cart; same outcome repeat = replay), POST :id/cancel (PLACED|PAID; release stock; payment CANCELLED or REFUNDED; audit). cancelLockedOrder + lockOrder exported for Phase 6 admin. Tx options maxWait 10s / timeout 20s.
+- frontend: AddressForm (field-level server errors), AddressesPage, ProfilePage, CheckoutPage (address radio/inline add, review, one idempotency key per attempt, PENDING_ORDER_EXISTS/INSUFFICIENT_STOCK handling), OrdersPage (paginated), OrderDetailPage (simulated payment panel Pay/Fail/Cancel, result banners, cancel with confirm, items/address/totals/payment), StatusBadge, format helpers.
+
+Validation:
+- typecheck pass; npm test 120/120 ×3 consecutive runs (no flakiness), incl. 6-buyer last-unit race (1×201, 5×409, stock 0) and 5× concurrent same-key (1×201, 4×200, one order); build pass
+- Live vs Supabase (transaction pooler) as demo customer: checkout 201 (stock 24→22), replay 200 (22), second key 409 PENDING_ORDER_EXISTS, FAILED → stock 24 + cart kept, checkout #2 → PAID + cart cleared, cancel → REFUNDED + stock 24. Leaves 2 demo orders (KS-20261113-6DE6D3 PAYMENT_FAILED, KS-20261113-Z2GZHC CANCELLED).
+
+Decisions:
+- Payment UI lives on /orders/:id (no separate /pay route); checkout redirects there.
+- Payment endpoint is owner-only; admin status changes come in Phase 6.
+- On SUCCESS only the ordered products are removed from the cart (items added after ordering stay).
+
+Known issues:
+- None blocking. Abandoned PLACED orders hold stock until cancelled (documented limitation).
+
+Next action:
+- Phase 6.
+
+## 2026-11-13 — Phase 4: Catalogue and cart
+
+Status: complete
+
+Implemented:
+- backend catalog: GET /api/categories, GET /api/products (q over name/brand/description ILIKE, categoryId|category slug, minPrice/maxPrice paise, sort newest|price_asc|price_desc|name_asc with id tiebreak, featured, page, limit ≤ 48; active products in active categories only), GET /api/products/:idOrSlug (404 when inactive). stockStatus IN_STOCK/LOW_STOCK(≤5)/OUT_OF_STOCK computed server-side.
+- backend cart (requireAuth, owner-scoped): GET, POST items (increments existing line), PATCH/DELETE items/:itemId (404 CART_ITEM_NOT_FOUND if not own), DELETE cart. Strict bodies (unknown keys e.g. price → 400). Early checks: PRODUCT_UNAVAILABLE 422, QUANTITY_LIMIT 422 (max 10/line), INSUFFICIENT_STOCK 409 with {available, requested, inCart}. Every response = full cart with current DB prices, per-item issue (UNAVAILABLE/OUT_OF_STOCK/INSUFFICIENT_STOCK), totals via calculateOrderTotals, canCheckout.
+- test infra: local Homebrew Postgres `kickstead_test` (user choice over Docker); backend/.env.test (gitignored) + .env.test.example; vitest globalSetup migrates via Prisma run from an empty temp dir (no .env loading), verifies target host, refuses supabase URLs; resetDatabase guard (must be kickstead_test); factories; test app with `user:<id>` fake tokens resolved from DB; fileParallelism off.
+- frontend: catalog/cart types + APIs, useCart + mutations (setQueryData with server cart; refetch on error), ProductsPage (URL-synced search w/ debounce, category chips, sort, ₹ price range → paise, pagination, skeleton/empty/error), ProductDetailPage (stock badge, qty picker capped by stock−inCart and 10, sign-in redirect, added feedback, API errors), CartPage (qty update, remove, confirm-clear, issues, server totals, checkout gating), HomePage featured grid, header cart count badge, vendor chunk splitting.
+
+Validation:
+- npm run typecheck → pass; npm test → 86/86 (34 new DB-backed catalogue/cart tests); npm run build → pass, no chunk warning
+- Supabase intact after tests (12 products, 4 categories, 3 users incl. user's Google login → Google sign-in works)
+- Live API vs Supabase data as demo customer: categories, pagination meta, search, category+sort, inactive 404, add → totals 1,299,800 + 233,964 GST + free shipping = 1,533,764 paise, last-unit 409 with details, price injection 400; demo cart cleared afterwards
+
+Decisions:
+- Test DB = local Homebrew Postgres (user, 2026-11-13). CI will use a Postgres service container.
+- URL keeps price filters in rupees; API takes paise.
+- Cart GET does not create a cart; first add does.
+- Mutations return 201 (add) / 200 with the full cart rather than 204.
+
+Known issues:
+- Cart add has a benign read-then-write race (two parallel adds could exceed stock in the cart); checkout's locked recheck is authoritative.
+
+Next action:
+- Phase 5.
+
 ## 2026-11-13 — Phase 3: Authentication and roles
 
 Status: complete (backend verified end-to-end with real Supabase tokens; Google UI flow pending user browser test)

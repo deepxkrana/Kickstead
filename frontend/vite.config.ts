@@ -6,6 +6,18 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          // Long-lived vendor chunks cache separately from app code.
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router'],
+            supabase: ['@supabase/supabase-js'],
+            query: ['@tanstack/react-query'],
+          },
+        },
+      },
+    },
     server: {
       port: 5173,
       // The browser always calls same-origin /api. In dev Vite proxies it to Express;

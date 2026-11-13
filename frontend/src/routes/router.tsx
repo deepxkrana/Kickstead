@@ -7,6 +7,14 @@ import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
 import { AuthCallbackPage } from '../pages/AuthCallbackPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { ProductsPage } from '../pages/ProductsPage';
+import { ProductDetailPage } from '../pages/ProductDetailPage';
+import { CartPage } from '../pages/CartPage';
+import { CheckoutPage } from '../pages/CheckoutPage';
+import { OrdersPage } from '../pages/OrdersPage';
+import { OrderDetailPage } from '../pages/OrderDetailPage';
+import { ProfilePage } from '../pages/ProfilePage';
+import { AddressesPage } from '../pages/AddressesPage';
 import { PagePlaceholder } from '../components/PagePlaceholder';
 
 // Guards improve navigation only — the API enforces every authorization rule.
@@ -19,19 +27,19 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/auth/callback', element: <AuthCallbackPage /> },
-      { path: '/products', element: <PagePlaceholder title="Shop" phase="Phase 4" /> },
-      { path: '/products/:id', element: <PagePlaceholder title="Product" phase="Phase 4" /> },
+      { path: '/products', element: <ProductsPage /> },
+      { path: '/products/:id', element: <ProductDetailPage /> },
 
       // Signed-in customers (admins may shop too)
       {
         element: <RequireAuth />,
         children: [
-          { path: '/cart', element: <PagePlaceholder title="Cart" phase="Phase 4" /> },
-          { path: '/checkout', element: <PagePlaceholder title="Checkout" phase="Phase 5" /> },
-          { path: '/orders', element: <PagePlaceholder title="Orders" phase="Phase 5" /> },
-          { path: '/orders/:id', element: <PagePlaceholder title="Order" phase="Phase 5" /> },
-          { path: '/profile', element: <PagePlaceholder title="Profile" phase="Phase 5" /> },
-          { path: '/addresses', element: <PagePlaceholder title="Addresses" phase="Phase 5" /> },
+          { path: '/cart', element: <CartPage /> },
+          { path: '/checkout', element: <CheckoutPage /> },
+          { path: '/orders', element: <OrdersPage /> },
+          { path: '/orders/:id', element: <OrderDetailPage /> },
+          { path: '/profile', element: <ProfilePage /> },
+          { path: '/addresses', element: <AddressesPage /> },
         ],
       },
 

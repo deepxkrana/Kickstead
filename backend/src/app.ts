@@ -6,7 +6,13 @@ import { env } from './config/env.js';
 import { createAuthMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
+import { createAddressesRouter } from './modules/addresses/addresses.routes.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { createCartRouter } from './modules/cart/cart.routes.js';
+import { createCatalogRouter } from './modules/catalog/catalog.routes.js';
+import { createCheckoutRouter } from './modules/checkout/checkout.routes.js';
+import { createOrdersRouter } from './modules/orders/orders.routes.js';
+import { createProfileRouter } from './modules/users/profile.routes.js';
 import { createDefaultTokenVerifier, type TokenVerifier } from './modules/auth/tokenVerifier.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { createAdminRouter } from './routes/admin.routes.js';
@@ -39,6 +45,12 @@ export function createApp({ tokenVerifier = createDefaultTokenVerifier() }: AppD
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', createAuthRouter(auth));
+  app.use('/api', createCatalogRouter());
+  app.use('/api/cart', createCartRouter(auth));
+  app.use('/api/profile', createProfileRouter(auth));
+  app.use('/api/addresses', createAddressesRouter(auth));
+  app.use('/api/checkout', createCheckoutRouter(auth));
+  app.use('/api/orders', createOrdersRouter(auth));
   app.use('/api/admin', createAdminRouter(auth));
 
   app.use(notFound);
