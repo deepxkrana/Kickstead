@@ -228,7 +228,8 @@ None — waiting for the user to start Phase 3.
 
 ```text
 Phase 3 (Supabase Auth: Google + seeded email/password demo users, ADMIN_EMAILS, requireAuth/requireRole).
-Will need from the user: Supabase project URL, anon (publishable) key, service-role (secret) key, and Google OAuth enabled in Supabase.
+Setup done (2026-11-13): publishable key in frontend/.env, secret key in database/.env (seed only), SUPABASE_URL in all three, ADMIN_EMAILS in backend/.env. Google provider enabled and verified. Project signs JWTs with ES256, so the backend verifies tokens via JWKS (no secret).
+Still to confirm during the first real login: Supabase redirect allow-list includes http://localhost:5173/**.
 ```
 
 ### Blockers
@@ -331,8 +332,10 @@ Use dummy credentials only. Replace these values with the actual seeded credenti
 
 | Role | Email | Password | Status |
 |---|---|---|---|
-| Admin | `admin@example.com` | `ChangeMe123!` | Placeholder |
-| Customer | `customer@example.com` | `ChangeMe123!` | Placeholder |
+| Admin | `admin@kickstead.dev` | `Kickstead@Demo1` | Approved 2026-11-13; seeded in Phase 3 |
+| Customer | `customer@kickstead.dev` | `Kickstead@Demo1` | Approved 2026-11-13; seeded in Phase 3 |
+
+Personal admin (Google sign-in): `deepakrrana5@gmail.com`, set via `ADMIN_EMAILS` in backend/.env.
 
 If these credentials are changed, update:
 
