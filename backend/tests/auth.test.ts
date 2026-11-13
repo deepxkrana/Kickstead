@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import type { User } from '@prisma/client';
-import { InvalidTokenError, type TokenVerifier, type VerifiedIdentity } from '../src/modules/auth/tokenVerifier.js';
+import { AuthUnavailableError, InvalidTokenError, type TokenVerifier, type VerifiedIdentity } from '../src/modules/auth/tokenVerifier.js';
 
 // In-memory stand-in for the users table. Database-backed tests come in Phase 8.
 const store = vi.hoisted(() => ({ users: new Map<string, User>() }));
@@ -53,6 +53,7 @@ const identities: Record<string, VerifiedIdentity> = {
 const fakeVerifier: TokenVerifier = {
   async verify(token) {
     if (token === 'expired-token') throw new InvalidTokenError('The session has expired.', 'expired');
+    if (token === 'outage-token') throw new AuthUnavailableError(new TypeError('fetch failed'));
     const identity = identities[token];
     if (!identity) throw new InvalidTokenError('The access token is invalid.', 'invalid');
     return identity;
@@ -98,6 +99,12 @@ describe('authentication (requireAuth)', () => {
     const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer expired-token');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('TOKEN_EXPIRED');
+  });
+
+  it('returns 503 AUTH_UNAVAILABLE when Supabase keys cannot be fetched', async () => {
+    const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer outage-token');
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('AUTH_UNAVAILABLE');
   });
 
   it('returns the current user without internal fields', async () => {

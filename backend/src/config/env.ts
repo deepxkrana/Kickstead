@@ -27,7 +27,12 @@ const envSchema = z.object({
     ),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema
+  .refine((e) => e.NODE_ENV !== 'production' || !e.CLIENT_URL.includes('*'), {
+    path: ['CLIENT_URL'],
+    message: 'A wildcard origin is not allowed in production; list the exact frontend origin(s)',
+  })
+  .safeParse(process.env);
 
 if (!parsed.success) {
   const problems = parsed.error.issues

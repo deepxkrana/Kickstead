@@ -16,7 +16,8 @@
     "dev:frontend": "npm run dev -w frontend",
     "typecheck": "npm run typecheck -w database -w backend -w frontend",
     "test": "npm run test -w backend",
-    "build": "npm run build -w backend -w frontend"
+    "build": "npm run build -w backend -w frontend",
+    "test:coverage": "npm run test:coverage -w backend"
   },
   "engines": {
     "node": ">=22"

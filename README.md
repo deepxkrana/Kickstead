@@ -8,7 +8,7 @@ The focus is on correctness rather than feature count:
 - Repeating a checkout request never creates a second order.
 - Every permission check runs on the server.
 
-> **Status: in progress.** The full customer journey is built (Phases 1–5 of 9): sign-in, catalogue, cart, addresses, checkout, simulated payment, order history and cancellation. The admin pages are placeholders until Phase 6. See [Project status](#project-status).
+> **Status: in progress.** The customer journey, the admin side, the hardening and the test suite are complete (Phases 1–8 of 9): 202 tests, 98% line coverage. Remaining: API docs, the ER diagram and deployment. See [Project status](#project-status).
 
 ---
 
@@ -151,7 +151,8 @@ Run these from the repository root.
 | `npm run db:seed` | Load or refresh the catalogue, and create or reset the demo accounts |
 | `npm run dev:backend` | Start the API with auto-reload |
 | `npm run dev:frontend` | Start the Vite dev server |
-| `npm test` | Run the backend test suite |
+| `npm test` | Run the backend test suite (needs the local test database) |
+| `npm run test:coverage` | Same, with a coverage report |
 | `npm run typecheck` | Type-check all three packages |
 | `npm run build` | Production build of the backend (`backend/dist`) and frontend (`frontend/dist`) |
 
@@ -170,7 +171,7 @@ Each run applies the migrations to `kickstead_test` and resets the tables betwee
 - runs Prisma from an empty temporary folder, so it can't read the real `.env` files,
 - checks the target host before migrating.
 
-Current tests (120) cover:
+Current tests: **202, all passing, 98.2% line coverage, 92% branch coverage** (`npm run test:coverage`). They cover:
 - **Pricing:** GST, the free-shipping threshold, tax rounding, and rejection of invalid amounts.
 - **Order statuses:** every allowed change succeeds and the disallowed ones are rejected.
 - **API errors:** the standard error format and security headers.
@@ -210,9 +211,57 @@ Current tests (120) cover:
   - **Fail or cancel payment:** stock returned and logged, cart kept.
   - A failed order is final. A simultaneous Pay and Fail on the same order apply exactly one outcome.
   - Order lists and details show only the customer's own orders.
-  - **Cancelling:** a `PLACED` order gets stock back and payment `CANCELLED`; a `PAID` order is refunded (simulated). Cancelling twice, after packing, or someone else's order is rejected. They run against a separate local PostgreSQL database, never against Supabase.
+  - **Cancelling:** a `PLACED` order gets stock back and payment `CANCELLED`; a `PAID` order is refunded (simulated). Cancelling twice, after packing, or someone else's order is rejected.
+- **Admin** (AC-05 to AC-07):
+  - All 10 admin endpoints return `401` to anonymous users and `403` to customers, with no data change.
+  - **Products:** create (with a generated slug, starting stock logged, audited) and update (with a before/after audit trail). Duplicate slugs get `409`, and stock can't be set through the product update.
+  - **Stock changes:** set or adjust, logged and audited. Going negative or making no change gets `422`.
+  - **Categories:** create, rename and deactivate. Deactivating hides the category's products from shoppers.
+  - **Fulfilment:** `PAID → PACKED → SHIPPED → DELIVERED`, each step audited.
+  - **Invalid changes:** a skipped step or a move out of a final state gets `409`. An admin trying to set a payment outcome gets `422`.
+  - **Admin cancellation:** refunds and restocks.
+  - **Order search:** by order number or email, and by status.
+  - **The dashboard reconciles with the orders list:** counts by status, and revenue only from paid or fulfilled orders.
+  - The audit log is filterable and contains no secrets.
+- **Full journey (AC-01), in one test:**
+  1. The customer signs in, searches, opens the product, adds it to the cart, adds an address, checks out and pays.
+  2. The order shows up as confirmed and in their history.
+  3. The admin finds the same order and packs it.
+  4. The dashboard revenue updates, and the audit log shows each action with its actor.
+- **Inventory ledger:** after reserve, release, cancel, refund and admin adjustments, every product's movements add up to its current stock, and every running total matches.
+- **Edge cases:**
+  - Two browser tabs checking out with different keys → one order and one `409`.
+  - The price at checkout wins over the price when the item went into the cart.
+  - A deactivated category blocks checkout. The 10-per-item cap is enforced at checkout too.
+  - A reused key with a different address returns the original order.
+  - The second overselling guard works even without the row lock.
+  - Once an admin cancels an unpaid order, the customer can't pay it.
+  - The profile update can't change role or email.
+  - Address limits work, and so does admin catalogue validation.
+  - 8 concurrent first sign-ins create exactly one user.
+  - Database errors map to the right status codes. Unexpected errors return a safe `500` with no internal details.
+- **Security:**
+  - All 16 customer endpoints return `401` without a token.
+  - API responses carry `no-store`, a request ID and security headers. Other origins get no CORS header.
+  - Bodies over 100 KB get `413`, and absurd page numbers get `400`.
+  - Search treats `%` and `_` literally.
+  - Checkout is rate-limited per user (`429 RATE_LIMITED`) without affecting other users, and the whole API is rate-limited per IP.
+  - An unreachable Supabase key server gives `503 AUTH_UNAVAILABLE`, not `401`. They run against a separate local PostgreSQL database, never against Supabase.
 
 ---
+
+### Acceptance criteria → tests
+
+| PRD criterion | Proven by |
+|---|---|
+| **AC-01** End-to-end customer journey | `journey.test.ts` → *complete customer journey, confirmed by the admin* |
+| **AC-02** Safe stock handling | `checkout.test.ts` → *buying 2 of a product with stock 1 returns 409 and stock stays 1*; *lets at most one of many buyers win* (6 parallel buyers, last unit); `gaps.test.ts` → second guard; `journey.test.ts` → ledger invariant |
+| **AC-03** Idempotent checkout | `checkout.test.ts` → *replays the original order*; *exactly one order when the same key is sent concurrently*; `gaps.test.ts` → two tabs with different keys; reused key with a different address |
+| **AC-04** Payment failure / cancellation | `orders.test.ts` → *FAILED / CANCELLED returns the stock, keeps the cart*; *a failed order is final*; *concurrent Pay and Fail* |
+| **AC-05** Authorization | `admin.test.ts` → every admin endpoint returns 401/403 with no data change; `security.test.ts` → all 16 customer endpoints return 401; ownership tests in cart, addresses, orders and checkout |
+| **AC-06** Valid state transitions | `admin.test.ts` → fulfilment path, invalid transitions return 409, payment statuses return 422; `orderStates.test.ts` → full transition map |
+| **AC-07** Reconciled reporting | `admin.test.ts` → *dashboard reconciles with orders* (compared against the admin order list) |
+| **AC-08** Reproducible setup | Each test run migrates the local database from the committed migrations. Also checked by hand: a brand-new empty database → `migrate deploy` → seed ×2 → 12 tables, RLS 12/12, 16 checks, balanced ledger |
 
 ## Business rules
 
@@ -244,7 +293,12 @@ Checkout has two steps:
 1. Checkout creates a `PLACED` order and reserves its stock.
 2. The payment page then simulates **Pay**, **Fail** or **Cancel**. A failed or cancelled payment returns the stock, and each stock change is logged.
 
-**Revenue** is the sum of order totals with status `PAID`, `PACKED`, `SHIPPED` or `DELIVERED`.
+**Revenue** is the sum of order totals (including GST and shipping) with status `PAID`, `PACKED`, `SHIPPED` or `DELIVERED`. Cancelled orders (including refunded ones), unpaid orders and failed payments are excluded. The dashboard computes every figure with one grouped query on the `orders` table, so it always matches the admin order list.
+
+**Who changes what:**
+- **Customers** record payment outcomes (`PAID`, `PAYMENT_FAILED`, `PAYMENT_CANCELLED`) through the payment flow, and can cancel `PLACED` or `PAID` orders.
+- **Admins** move orders through fulfilment (`PACKED → SHIPPED → DELIVERED`) and can cancel `PLACED` or `PAID` orders. They can't set payment outcomes by hand.
+- Every change goes through the same transition map and an order-row lock, and is audited.
 
 ### Authentication and roles
 
@@ -321,9 +375,32 @@ The database itself enforces the critical rules, so a bug in the application can
 | GET | `/api/orders/:id` | Signed in (owner) | Order detail with items, address, totals, payment and available actions |
 | POST | `/api/orders/:id/payment` | Signed in (owner) | `{ outcome: "SUCCESS" \| "FAILED" \| "CANCELLED" }` (simulated) |
 | POST | `/api/orders/:id/cancel` | Signed in (owner) | `{ reason? }`. Only `PLACED` or `PAID` orders. |
+| GET | `/api/admin/dashboard` | Admin | Order counts, revenue (see the rule below), low stock, recent orders |
+| GET / POST | `/api/admin/products` | Admin | List all products (`q`, `categoryId`, `status`, `lowStock`, paging) or create one (`initialStock` optional) |
+| GET / PATCH | `/api/admin/products/:id` | Admin | Detail with stock history, or update fields (price, status, featured, …). Stock can't be changed here. |
+| PATCH | `/api/admin/products/:id/stock` | Admin | `{ mode: "set" \| "adjust", quantity, note? }`. Logged as `ADMIN_ADJUSTMENT`. |
+| GET / POST | `/api/admin/categories` | Admin | List with product counts, or create |
+| PATCH | `/api/admin/categories/:id` | Admin | Rename, describe, activate or deactivate |
+| GET | `/api/admin/orders` | Admin | `q` (order number, customer name or email), `status`, paging |
+| GET | `/api/admin/orders/:id` | Admin | Detail, customer, allowed next statuses, audit history, stock movements |
+| PATCH | `/api/admin/orders/:id/status` | Admin | `{ status: PACKED \| SHIPPED \| DELIVERED \| CANCELLED, reason? }` |
 | GET | `/api/admin/customers` | Admin | Paginated customer list, `q` search |
+| GET | `/api/admin/audit-logs` | Admin | `action`, `entityType`, `entityId`, paging |
 
 Success responses use `{ "data": … }`. Lists add `"meta": { page, limit, total, totalPages }`. Cart endpoints reject unknown fields, so a client can't send a price.
+
+### Security and reliability
+
+| Area | What is in place |
+|---|---|
+| Authentication | Supabase JWTs are checked locally against Supabase's public keys. Only asymmetric signing algorithms are accepted, and issuer, audience, expiry and subject are all checked. If the keys can't be fetched, the API answers `503 AUTH_UNAVAILABLE` rather than `401`, so users aren't signed out during an outage. |
+| Authorization | `requireAuth` runs on every non-public route, and `requireRole('ADMIN')` on the whole `/api/admin` router. Ownership checks on carts, addresses and orders return `404` for other people's data. Roles come from the database. |
+| Validation | Every body, query and route parameter is validated with zod. Strict bodies reject unknown fields, so a client can't send prices or totals. Page size and page number are capped. Search escapes SQL wildcards. |
+| Rate limiting | 300 requests/min per IP across `/api`, and 20/min per user for checkout, payment and cancellation. Exceeding either returns `429 RATE_LIMITED` with standard `RateLimit` headers. Behind a proxy, `trust proxy` makes sure the real client IP is used. |
+| HTTP | Helmet security headers (CSP, HSTS, nosniff, frame-ancestors), CORS restricted to `CLIENT_URL` (a wildcard is refused at startup in production), a 100 KB body limit, `Cache-Control: no-store` on API responses, and no `X-Powered-By` header. |
+| Errors and logs | One error format. Stack traces are never sent to clients. Each request gets an `X-Request-Id`, which is included in `500` responses and in server logs. Access logs never contain bodies or auth headers. Unhandled rejections are logged; an uncaught exception exits the process so the container restarts it. |
+| Data integrity | Locking transactions, CHECK constraints, unique and partial unique indexes, and order-row locks for status changes (see above). Row-level security keeps Supabase's REST API closed. |
+| Accessibility | Visible labels on all fields, focus rings, a "Skip to content" link, reduced-motion support, and live regions for async feedback. Text colors meet WCAG AA (≥ 4.5:1): small red text uses `#D00000` (5.7:1). DESIGN.md's `#FF0000` (4.0:1) is kept for accents and borders, and on the black header (5.3:1). |
 
 ### API error format
 
@@ -350,10 +427,10 @@ Every error response has the same shape:
 | 3 | Authentication and roles (Supabase Auth) | ✅ Done |
 | 4 | Catalogue and cart | ✅ Done |
 | 5 | Checkout, simulated payment, orders | ✅ Done |
-| 6 | Admin dashboard and operations | ⏳ Next |
-| 7 | Security and reliability hardening | Planned |
-| 8 | Database-backed tests | Planned |
-| 9 | API docs, ER diagram, deployment | Planned |
+| 6 | Admin dashboard and operations | ✅ Done |
+| 7 | Security and reliability hardening | ✅ Done |
+| 8 | Test gap review and coverage | ✅ Done |
+| 9 | API docs, ER diagram, deployment | ⏳ Next |
 
 ## Demo credentials
 
@@ -376,6 +453,8 @@ The demo customer has a saved delivery address in Mumbai. Running the seed again
 - Brand names in the seed data are fictional.
 - The stock check when adding to the cart only gives early feedback. It doesn't reserve stock. Stock is reserved only when checkout places the order, and that is where the final check happens.
 - Product search uses case-insensitive substring matching (`ILIKE`), with no full-text ranking.
+- Rate limits are kept in memory, per server process. That's fine for the single EC2 instance. Running several instances would need a shared store such as Redis.
+- `npm audit` reports a high-severity advisory in `deepmerge-ts`. It's used only by the Prisma **CLI's** config loader, which npm pulls in as a peer of `@prisma/client`. The running server never calls it and never passes it user input. Fixing it needs a breaking upgrade to Prisma 7, so it's accepted for the MVP. Advisories in Vitest are dev-only.
 - New accounts are created through Google only. Supabase can't turn off email sign-up for some providers and leave it on for others, so someone could create an email/password account through Supabase's API. It would only ever be a `CUSTOMER`.
 - The Supabase session (access and refresh tokens) is kept in browser storage by the Supabase client, not in an HTTP-only cookie. The API accepts it as a Bearer token.
 - Roles are assigned at first sign-in. Adding an email to `ADMIN_EMAILS` later doesn't promote an existing customer.

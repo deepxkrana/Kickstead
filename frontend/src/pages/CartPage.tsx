@@ -57,7 +57,7 @@ function CartLine({ item, busy }: { item: CartItem; busy: boolean }) {
           </button>
         </div>
 
-        {item.issue && <p className="text-body-sm font-semibold text-error">{ISSUE_TEXT[item.issue]}</p>}
+        {item.issue && <p className="text-body-sm font-semibold text-error-strong">{ISSUE_TEXT[item.issue]}</p>}
         {error && <ErrorMessage>{error.message}</ErrorMessage>}
       </div>
     </li>
@@ -163,7 +163,7 @@ export function CartPage() {
             </button>
           )}
           {!canCheckout && (
-            <p className="mt-2 text-caption text-error">Fix the highlighted items to continue.</p>
+            <p className="mt-2 text-caption text-error-strong">Fix the highlighted items to continue.</p>
           )}
           <p className="mt-3 text-caption text-primary-60">Final amount is confirmed at checkout.</p>
         </aside>

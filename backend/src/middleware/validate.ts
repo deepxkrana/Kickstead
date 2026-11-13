@@ -28,7 +28,9 @@ declare module 'express-serve-static-core' {
 export function validate(schemas: ValidationSchemas): RequestHandler {
   return (req, _res, next) => {
     req.validated = {
-      body: schemas.body ? schemas.body.parse(req.body) : undefined,
+      // Express 5 leaves req.body undefined when no body is sent; treat that as an empty object
+      // so endpoints whose fields are all optional (e.g. cancel) accept a bodiless POST.
+      body: schemas.body ? schemas.body.parse(req.body ?? {}) : undefined,
       query: schemas.query ? schemas.query.parse(req.query) : undefined,
       params: schemas.params ? schemas.params.parse(req.params) : undefined,
     };

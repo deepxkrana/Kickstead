@@ -14,6 +14,14 @@ export interface TokenVerifier {
   verify(token: string): Promise<VerifiedIdentity>;
 }
 
+/** Supabase's signing keys could not be fetched (network/outage). Not the caller's fault. */
+export class AuthUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super('Authentication service is unavailable.', { cause });
+    this.name = 'AuthUnavailableError';
+  }
+}
+
 export class InvalidTokenError extends Error {
   constructor(
     message: string,
@@ -50,6 +58,11 @@ export function createSupabaseTokenVerifier({ issuer, keys }: SupabaseVerifierOp
       } catch (err) {
         if (err instanceof joseErrors.JWTExpired) {
           throw new InvalidTokenError('The session has expired.', 'expired');
+        }
+        // Key-fetch problems are an outage, not a bad token: report 503, not 401, so clients
+        // don't sign the user out because Supabase was briefly unreachable.
+        if (err instanceof joseErrors.JWKSTimeout || !(err instanceof joseErrors.JOSEError)) {
+          throw new AuthUnavailableError(err);
         }
         throw new InvalidTokenError('The access token is invalid.', 'invalid');
       }

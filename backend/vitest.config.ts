@@ -20,6 +20,12 @@ export default defineConfig({
     globalSetup: ['tests/setup/globalSetup.ts'],
     // Database tests share one database and reset it between tests, so files run one at a time.
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/server.ts'],
+      reporter: ['text-summary', 'text'],
+    },
     env: {
       NODE_ENV: 'test',
       DATABASE_URL: testDatabaseUrl,

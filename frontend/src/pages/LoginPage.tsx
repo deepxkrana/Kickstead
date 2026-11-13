@@ -51,7 +51,7 @@ export function LoginPage() {
     <section className="mx-auto grid max-w-5xl gap-12.5 px-4 py-12.5 md:grid-cols-2">
       <div className="flex flex-col gap-5">
         <div>
-          <p className="text-label-sm text-error uppercase">Welcome back</p>
+          <p className="text-label-sm text-error-strong uppercase">Welcome back</p>
           <h1 className="mt-2 text-headline-lg uppercase">Sign in</h1>
           <p className="mt-2 text-body-md text-primary-60">
             Use your Google account. New here? Signing in with Google creates your account.

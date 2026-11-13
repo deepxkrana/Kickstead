@@ -8,7 +8,7 @@ interface ProductImageProps {
 export function ProductImage({ src, alt, className = '' }: ProductImageProps) {
   if (!src) {
     return (
-      <div className={`flex items-center justify-center bg-neutral text-label-sm text-primary-40 uppercase ${className}`}>
+      <div className={`flex items-center justify-center bg-neutral text-label-sm text-primary-60 uppercase ${className}`}>
         No image
       </div>
     );

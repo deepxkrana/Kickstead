@@ -16,6 +16,9 @@
   --color-surface: #ffffff;
   --color-on-surface: #000000;
   --color-error: #ff0000;
+  /* Accessible red (5.7:1 on white) for small text and text-on-red badges. #ff0000 (4.0:1)
+     stays for accents, underlines and borders, and for red on the black header (5.3:1). */
+  --color-error-strong: #d00000;
   --color-primary-80: #1a1a1a;
   --color-primary-60: #4d4d4d;
   --color-primary-40: #808080;
@@ -107,7 +110,7 @@
     @apply rounded-lg border border-tertiary bg-surface p-4 text-on-surface;
   }
   .input {
-    @apply h-10 w-full rounded-md border border-primary-20 bg-surface px-3 text-body-md text-on-surface placeholder:text-primary-40 focus:border-primary focus:outline-none;
+    @apply h-10 w-full rounded-md border border-primary-20 bg-surface px-3 text-body-md text-on-surface placeholder:text-primary-60 focus:border-primary focus:ring-2 focus:ring-primary/25 focus:outline-none;
   }
   .chip {
     @apply inline-flex items-center rounded-full bg-neutral px-3 py-1.5 text-label-sm text-primary uppercase;
@@ -118,4 +121,24 @@
   html {
     @apply bg-surface font-sans text-on-surface antialiased;
   }
+  /* Visible keyboard focus for links and buttons that don't define their own. */
+  a:focus-visible,
+  button:focus-visible,
+  select:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+.skip-link {
+  @apply absolute top-2 left-2 z-50 -translate-y-20 rounded-md bg-secondary px-4 py-2 text-label-md text-primary uppercase ring-2 ring-primary focus:translate-y-0;
 }

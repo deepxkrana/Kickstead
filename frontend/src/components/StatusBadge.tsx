@@ -12,13 +12,13 @@ const LABEL: Record<OrderStatus, string> = {
 };
 
 const STYLE: Record<OrderStatus, string> = {
-  PLACED: 'bg-secondary text-error ring-1 ring-error',
+  PLACED: 'bg-secondary text-error-strong ring-1 ring-error',
   PAID: 'bg-primary text-secondary',
   PACKED: 'bg-primary text-secondary',
   SHIPPED: 'bg-primary text-secondary',
   DELIVERED: 'bg-neutral text-primary ring-1 ring-primary',
   CANCELLED: 'bg-neutral text-primary-60',
-  PAYMENT_FAILED: 'bg-error text-secondary',
+  PAYMENT_FAILED: 'bg-error-strong text-secondary',
   PAYMENT_CANCELLED: 'bg-neutral text-primary-60',
 };
 

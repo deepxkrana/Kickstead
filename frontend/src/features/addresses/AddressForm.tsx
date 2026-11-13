@@ -69,7 +69,7 @@ export function AddressForm({ initial, submitLabel, pending, error, onSubmit, on
               onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
             />
             {message && (
-              <p id={`addr-${field.name}-error`} className="text-caption text-error">
+              <p id={`addr-${field.name}-error`} className="text-caption text-error-strong">
                 {message}
               </p>
             )}

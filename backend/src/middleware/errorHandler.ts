@@ -72,7 +72,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     }
   }
 
-  // Unexpected: log the cause on the server, return a safe message to the client.
-  console.error(`[error] ${req.method} ${req.originalUrl}`, err);
-  res.status(500).json(body('INTERNAL_ERROR', 'Something went wrong. Please try again.'));
+  // Unexpected: log the cause (with the request id) on the server; return a safe message
+  // and the id so a user report can be matched to the log line. Never the stack trace.
+  console.error(`[error] ${req.id} ${req.method} ${req.path}`, err);
+  res.status(500).json(body('INTERNAL_ERROR', 'Something went wrong. Please try again.', { requestId: req.id }));
 };

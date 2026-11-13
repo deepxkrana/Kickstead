@@ -3,6 +3,7 @@ import { LOW_STOCK_THRESHOLD } from '../../config/pricing.js';
 import { prisma } from '../../db/prisma.js';
 import { Errors } from '../../shared/errors/AppError.js';
 import { pageMeta } from '../../shared/http/pagination.js';
+import { likeLiteral } from '../../shared/db/like.js';
 import type { ListProductsQuery } from './catalog.schemas.js';
 
 export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
@@ -56,11 +57,12 @@ export async function listProducts(query: ListProductsQuery) {
   const filters: Prisma.ProductWhereInput[] = [visibleProduct];
 
   if (query.q) {
+    const q = likeLiteral(query.q);
     filters.push({
       OR: [
-        { name: { contains: query.q, mode: 'insensitive' } },
-        { description: { contains: query.q, mode: 'insensitive' } },
-        { brand: { contains: query.q, mode: 'insensitive' } },
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { brand: { contains: q, mode: 'insensitive' } },
       ],
     });
   }

@@ -15,7 +15,6 @@ import { OrdersPage } from '../pages/OrdersPage';
 import { OrderDetailPage } from '../pages/OrderDetailPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { AddressesPage } from '../pages/AddressesPage';
-import { PagePlaceholder } from '../components/PagePlaceholder';
 
 // Guards improve navigation only — the API enforces every authorization rule.
 export const router = createBrowserRouter([
@@ -53,14 +52,16 @@ export const router = createBrowserRouter([
       {
         element: <AdminLayout />,
         children: [
-          { index: true, element: <PagePlaceholder title="Dashboard" phase="Phase 6" /> },
-          { path: 'products', element: <PagePlaceholder title="Products" phase="Phase 6" /> },
-          { path: 'products/new', element: <PagePlaceholder title="New product" phase="Phase 6" /> },
-          { path: 'products/:id/edit', element: <PagePlaceholder title="Edit product" phase="Phase 6" /> },
-          { path: 'orders', element: <PagePlaceholder title="Orders" phase="Phase 6" /> },
-          { path: 'orders/:id', element: <PagePlaceholder title="Order" phase="Phase 6" /> },
-          { path: 'customers', element: <PagePlaceholder title="Customers" phase="Phase 6" /> },
-          { path: 'audit-logs', element: <PagePlaceholder title="Audit log" phase="Phase 6" /> },
+          // Admin pages are code-split: shoppers never download them.
+          { index: true, lazy: async () => ({ Component: (await import('../pages/admin/AdminDashboardPage')).AdminDashboardPage }) },
+          { path: 'products', lazy: async () => ({ Component: (await import('../pages/admin/AdminProductsPage')).AdminProductsPage }) },
+          { path: 'products/new', lazy: async () => ({ Component: (await import('../pages/admin/AdminProductFormPage')).AdminProductFormPage }) },
+          { path: 'products/:id/edit', lazy: async () => ({ Component: (await import('../pages/admin/AdminProductFormPage')).AdminProductFormPage }) },
+          { path: 'categories', lazy: async () => ({ Component: (await import('../pages/admin/AdminCategoriesPage')).AdminCategoriesPage }) },
+          { path: 'orders', lazy: async () => ({ Component: (await import('../pages/admin/AdminOrdersPage')).AdminOrdersPage }) },
+          { path: 'orders/:id', lazy: async () => ({ Component: (await import('../pages/admin/AdminOrderDetailPage')).AdminOrderDetailPage }) },
+          { path: 'customers', lazy: async () => ({ Component: (await import('../pages/admin/AdminCustomersPage')).AdminCustomersPage }) },
+          { path: 'audit-logs', lazy: async () => ({ Component: (await import('../pages/admin/AdminAuditLogsPage')).AdminAuditLogsPage }) },
         ],
       },
     ],

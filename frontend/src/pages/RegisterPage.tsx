@@ -11,7 +11,7 @@ export function RegisterPage() {
   return (
     <section className="mx-auto flex max-w-md flex-col gap-5 px-4 py-12.5">
       <div>
-        <p className="text-label-sm text-error uppercase">Join Kickstead</p>
+        <p className="text-label-sm text-error-strong uppercase">Join Kickstead</p>
         <h1 className="mt-2 text-headline-lg uppercase">Create account</h1>
         <p className="mt-2 text-body-md text-primary-60">
           Kickstead accounts are created with Google. The first time you continue, we set up your

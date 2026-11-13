@@ -17,7 +17,7 @@ Do not use this file as a replacement for source code, tests, or the product req
 | Delivery window | Deadline 2026-11-14 |
 | Primary users | Customer and Admin |
 | Product goal | Complete customer-to-order journey with safe inventory and admin operations |
-| Current phase | Phase 5 — Checkout + orders (complete). Next: Phase 6 — Admin |
+| Current phase | Phase 8 — Test gap review (complete). Next: Phase 9 — Docs + deployment |
 | Last updated | 2026-11-13 |
 
 ---
@@ -154,8 +154,8 @@ None.
 - [x] Sorting.
 - [x] Pagination.
 - [x] Product detail.
-- [ ] Admin product CRUD.
-- [ ] Admin category management.
+- [x] Admin product CRUD.
+- [x] Admin category management.
 
 ### Cart and checkout
 
@@ -179,30 +179,30 @@ None.
 
 - [x] Customer order history.
 - [x] Customer order detail.
-- [ ] Valid order transitions.
-- [ ] Admin order list.
-- [ ] Admin order detail.
-- [ ] Admin inventory update.
-- [x] Admin customer list. (GET /api/admin/customers API only; page in Phase 6)
-- [ ] Dashboard summary.
-- [ ] Audit log creation. (order created / payment / cancellation done; admin product/inventory/status in Phase 6)
-- [ ] Audit log view.
+- [x] Valid order transitions.
+- [x] Admin order list.
+- [x] Admin order detail.
+- [x] Admin inventory update.
+- [x] Admin customer list.
+- [x] Dashboard summary.
+- [x] Audit log creation.
+- [x] Audit log view.
 
 ### Quality and delivery
 
-- [ ] Unit tests.
-- [ ] API/integration tests. (catalogue + cart done against local test DB; checkout/orders pending)
+- [x] Unit tests.
+- [x] API/integration tests.
 - [x] Insufficient-stock test.
 - [x] Duplicate-checkout test.
 - [x] Failed-payment test.
-- [ ] Invalid-transition test.
+- [x] Invalid-transition test.
 - [x] Authorization test.
 - [ ] README.
 - [ ] API documentation.
 - [ ] ER diagram.
 - [x] Demo credentials. (seeded + in README)
 - [ ] Known limitations.
-- [ ] Clean database setup verified.
+- [x] Clean database setup verified. (fresh local DB: migrate + seed ×2, 2026-11-14)
 - [ ] Production build verified.
 - [ ] Walkthrough video prepared.
 
@@ -215,19 +215,19 @@ Update this section after each phase.
 ### Last completed phase
 
 ```text
-Phases 1–5 complete (planning, scaffold + database, auth, catalogue + cart, checkout + orders).
+Phases 1–8 complete (planning, scaffold + database, auth, catalogue + cart, checkout + orders, admin, hardening, test review).
 ```
 
 ### Current work
 
 ```text
-None — waiting for the user to start Phase 6.
+None — waiting for the user to start Phase 9.
 ```
 
 ### Next task
 
 ```text
-Phase 6 — Admin: dashboard (counts, revenue rule, low stock), products + categories CRUD/activate, stock adjustment (ADMIN_ADJUSTMENT movement + audit), orders list/search/detail, status transitions via assertTransition (+ admin cancel via cancelLockedOrder), customers page, audit log page. Code-split admin routes.
+Phase 9 — docs/api.md, docs/er-diagram.md, Dockerfile (exclude Prisma CLI from runtime), GitHub Actions (tests with Postgres service container, build+push GHCR, deploy to EC2 via SSH), vercel.json (rewrites + security headers), Supabase/Google redirect URLs for production, update Architecture.md/Rules.md deviations (G1, with permission). Will need from user: GitHub repo, EC2 host/SSH access, Vercel project.
 ```
 
 ### Blockers
@@ -272,6 +272,78 @@ Next action:
 ### Phase history
 
 ```text
+## 2026-11-14 — Phase 8: Test gap review
+
+Status: complete
+
+Method: coverage report (added @vitest/coverage-v8@3.2.7, `npm run test:coverage`) + mapping every PRD AC and Rules §10 item to tests.
+
+Bugs found and fixed:
+- Concurrent first sign-in: Prisma upsert is not atomic → 98/120 parallel first requests returned 409 UNIQUE_CONSTRAINT (real impact: /auth/me + /cart fire together on a new user's first page). createIfMissing now inserts and on P2002 re-reads the row; a different id with the same email → 409 ACCOUNT_CONFLICT.
+- Bodiless POST to endpoints with all-optional bodies (POST /orders/:id/cancel) returned 400 (Express 5 req.body undefined). validate() now parses `req.body ?? {}`. Found by the ledger test (the cancel never happened; a later "set stock" masked the total).
+
+Added tests (176 → 202):
+- journey.test.ts: AC-01 full path via API incl. admin + dashboard + audit actor attribution; inventory ledger invariant (sum of movements = stock, every running stockAfter correct, reasons sequence).
+- gaps.test.ts: two tabs/different keys race, price change at checkout, inactive category at checkout, 10-cap at checkout, same key different address, reserveStock second guard, admin cancel PLACED then customer pay 409, AC-05 no data change on admin status, profile cannot change role/email, address limit + default rule, admin product detail/movements, CATEGORY_NOT_FOUND, CATEGORY_NAME_TAKEN, empty update 400, real-DB provisioning (ADMIN_EMAILS, 10×8 concurrent first sign-ins, email sync, ACCOUNT_CONFLICT), customer search real rows, health DB-down 503, errorHandler Prisma mapping + safe 500.
+- orders.test.ts: bodiless cancel accepted; bodiless payment still 400.
+
+Validation:
+- 202/202 ×3 consecutive runs; coverage 98.15% lines / 92.14% branches / 99.11% functions (92.74% before); only env.ts < 90% (startup failure path, manually verified).
+- AC-08: fresh local DB → migrate deploy (from empty temp cwd, no .env) → seed ×2 (no Supabase keys) → 11 tables + _prisma_migrations, RLS 12/12, 16 CHECKs, ledger balanced → dropped.
+
+Decisions:
+- No frontend component tests (PLAN: "only if time permits"); business rules are enforced and tested server-side.
+
+Next action:
+- Phase 9.
+
+## 2026-11-13 — Phase 7: Security and reliability hardening
+
+Status: complete
+
+Findings & fixes:
+- BUG: Prisma `contains` does not escape LIKE wildcards ("%" matched all 11 products). Added shared/db/likeLiteral and applied to all 4 searches (catalog, admin products, admin orders, customers). Verified live: "%" → 0.
+- Auth: JWKS fetch failures were reported as 401 INVALID_TOKEN; now AuthUnavailableError → 503 AUTH_UNAVAILABLE (logged with request id).
+- npm audit --omit=dev: 3 high = deepmerge-ts via Prisma CLI (@prisma/config), pulled in as @prisma/client peer. Not reachable at runtime; fix requires Prisma 7 (breaking). Accepted + documented; plan to exclude CLI from runtime Docker image.
+- Contrast: #FF0000 on white = 4.00:1 (fails AA small text); primary-40 = 3.95:1. Added --color-error-strong #D00000 (5.70:1) for small red text and white-on-red badges; kept #FF0000 for accents/borders and on black header (5.25:1). Placeholder/"No image" text → primary-60 (8.45:1). Deviation from DESIGN.md recorded here and in index.css.
+
+Implemented:
+- express-rate-limit@8: global 300/min/IP on /api; sensitive 20/min/user on checkout, payment, cancel; 429 RATE_LIMITED in standard error shape + draft-8 RateLimit headers; disabled in NODE_ENV=test unless injected via createApp({ rateLimits }).
+- requestContext middleware: X-Request-Id (reuses safe incoming id), Cache-Control: no-store; request id in 500 bodies + error/auth logs.
+- env: production refuses wildcard CLIENT_URL. pagination page ≤ 10,000. server: unhandledRejection logged, uncaughtException exits (container restarts).
+- frontend a11y: error-strong token, .input focus ring, global focus-visible outline, reduced-motion (spinner/skeleton/transitions), skip-to-content link + main#main in both layouts.
+
+Validation:
+- typecheck pass; npm test 176/176 (new: security.test.ts — 16 protected endpoints 401, public endpoints 200, headers, request id reuse/sanitise, 413, page cap, CORS allow/deny, wildcard literal search, per-user checkout 429 without affecting other users, global per-IP 429; auth 503; verifier outage); build pass
+- Production build smoke: headers present (CSP, HSTS, nosniff, RateLimit, X-Request-Id, no-store, CORS only for localhost:5173), access log has no auth headers, wildcard CORS in production → startup error.
+- Contrast ratios computed (WCAG formula), not estimated.
+
+Next action:
+- Phase 8.
+
+## 2026-11-13 — Phase 6: Admin
+
+Status: complete
+
+Implemented:
+- backend (all behind router-level requireAuth + requireRole ADMIN): GET /admin/dashboard (one groupBy on orders → totals, byStatus, revenue for REVENUE_STATUSES, documented revenueRule; low stock (active, ≤5) count + top 10; recent 5), products list (all incl. inactive; q/categoryId/status/lowStock) / detail (+ last 50 movements) / create (slugify, initialStock → ADMIN_ADJUSTMENT movement, PRODUCT_CREATED audit) / update (strict, no stock; PRODUCT_UPDATED audit with changed fields from→to; *_SLUG_TAKEN 409) / stock (row lock, set|adjust, STOCK_NEGATIVE / NO_CHANGE 422, movement + INVENTORY_ADJUSTED audit), categories list (product counts) / create / update (audited), orders list (q on order number / customer name / email, status) / detail (customer, adminActions.nextStatuses, audit history, movements) / PATCH status (ADMIN_TARGET_STATUSES = PACKED|SHIPPED|DELIVERED|CANCELLED; payment statuses → 422 PAYMENT_STATUS_NOT_ADMIN; lockOrder + assertTransition; CANCELLED reuses cancelLockedOrder), customers, audit logs (action/entityType/entityId filters, actor).
+- frontend (lazy-loaded route modules): dashboard (stat tiles linking to filtered lists, revenue rule, recent orders, low stock), products (filters, active toggle with confirm, inline stock editor with preview), product form (create/edit, ₹→paise, field errors, image preview, stock history), categories (add, rename, activate/deactivate with impact warning), orders (search, status chips), order detail (allowed next-status buttons, cancel with reason prompt, history timeline, stock movements, customer/payment/totals/address), customers, audit log (filters, entity links, metadata summary). Admin nav gains Categories. Removed unused PagePlaceholder.
+
+Validation:
+- typecheck pass; npm test 147/147 (27 new admin tests: 10 endpoints × 401/403, product/stock/category admin, AC-06 transitions + invalid 409s + 422 payment status, admin cancel refund/restock, search/filter, AC-07 dashboard reconciliation, audit filters + no secrets); build pass (admin chunks 2–8 kB each)
+- Live vs Supabase: customer→dashboard 403; PAID→DELIVERED 409; set PAID 422; PACKED→SHIPPED→DELIVERED with ADMIN audit; restock +1 logged; revenue 0 → 766,882 paise (649,900 + 18% GST, free shipping); search, audit, customers OK. Leaves 1 DELIVERED demo order; Tempo stock back to 24 via logged adjustment.
+
+Decisions:
+- Admins cannot set payment outcomes; only fulfilment + cancel. (Interpretation of PRD PLACED→PAID: that transition happens through the payment flow.)
+- Admin categories page added (/admin/categories) — not in PRD page list but needed for category management.
+- Customer list excludes ADMIN users.
+
+Known issues:
+- None blocking.
+
+Next action:
+- Phase 7.
+
 ## 2026-11-13 — Phase 5: Checkout, payment, orders
 
 Status: complete

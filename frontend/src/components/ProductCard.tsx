@@ -33,11 +33,11 @@ export function ProductGridSkeleton({ count = 8 }: { count?: number }) {
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4" aria-hidden>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="overflow-hidden rounded-lg border border-tertiary">
-          <div className="aspect-square animate-pulse bg-neutral" />
+          <div className="aspect-square animate-pulse motion-reduce:animate-none bg-neutral" />
           <div className="space-y-2 p-4">
-            <div className="h-3 w-1/3 animate-pulse rounded-sm bg-neutral" />
-            <div className="h-4 w-2/3 animate-pulse rounded-sm bg-neutral" />
-            <div className="h-4 w-1/4 animate-pulse rounded-sm bg-neutral" />
+            <div className="h-3 w-1/3 animate-pulse motion-reduce:animate-none rounded-sm bg-neutral" />
+            <div className="h-4 w-2/3 animate-pulse motion-reduce:animate-none rounded-sm bg-neutral" />
+            <div className="h-4 w-1/4 animate-pulse motion-reduce:animate-none rounded-sm bg-neutral" />
           </div>
         </div>
       ))}

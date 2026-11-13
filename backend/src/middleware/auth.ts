@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 import type { Role } from '@prisma/client';
 import { AppError, Errors } from '../shared/errors/AppError.js';
 import { resolveUser, type AuthUser } from '../modules/auth/auth.service.js';
-import { InvalidTokenError, type TokenVerifier } from '../modules/auth/tokenVerifier.js';
+import { AuthUnavailableError, InvalidTokenError, type TokenVerifier } from '../modules/auth/tokenVerifier.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -40,6 +40,10 @@ export function createAuthMiddleware(verifier: TokenVerifier): AuthMiddleware {
           err.reason === 'expired' ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN',
           err.message,
         );
+      }
+      if (err instanceof AuthUnavailableError) {
+        console.error(`[auth] ${req.id} signing keys unavailable`, err.cause);
+        throw new AppError(503, 'AUTH_UNAVAILABLE', 'Sign-in is temporarily unavailable. Please try again shortly.');
       }
       throw err;
     }

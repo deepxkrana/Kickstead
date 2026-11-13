@@ -14,7 +14,7 @@ function CartLink() {
     <NavLink to="/cart" className={navClass} aria-label={count ? `Cart, ${count} items` : 'Cart'}>
       Cart
       {count > 0 && (
-        <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-error px-1.5 text-label-sm text-secondary no-underline">
+        <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-error-strong px-1.5 text-label-sm text-secondary no-underline">
           {count}
         </span>
       )}
@@ -68,6 +68,9 @@ function AccountNav() {
 export function StoreLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       <header className="bg-primary text-secondary">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-x-5 gap-y-2 px-4 py-3">
           <Link to="/" className="text-headline-sm tracking-tight uppercase">
@@ -85,7 +88,7 @@ export function StoreLayout() {
         </div>
       </header>
 
-      <main className="flex-1">
+      <main id="main" tabIndex={-1} className="flex-1">
         <Outlet />
       </main>
 

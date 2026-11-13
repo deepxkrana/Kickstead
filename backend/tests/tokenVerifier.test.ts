@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWK } from 'jose';
 import {
+  AuthUnavailableError,
   createSupabaseTokenVerifier,
   InvalidTokenError,
   type TokenVerifier,
@@ -101,5 +102,15 @@ describe('Supabase token verifier', () => {
 
   it('rejects garbage', async () => {
     await expectInvalid('not.a.jwt', 'invalid');
+  });
+
+  it('reports an unreachable key server as AuthUnavailableError (503), not an invalid token', async () => {
+    const offline = createSupabaseTokenVerifier({
+      issuer: ISSUER,
+      keys: async () => {
+        throw new TypeError('fetch failed');
+      },
+    });
+    await expect(offline.verify(await token())).rejects.toBeInstanceOf(AuthUnavailableError);
   });
 });

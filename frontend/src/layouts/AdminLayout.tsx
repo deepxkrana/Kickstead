@@ -4,6 +4,7 @@ import { useAuth } from '../features/auth/AuthProvider';
 const adminNav = [
   { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/products', label: 'Products', end: false },
+  { to: '/admin/categories', label: 'Categories', end: false },
   { to: '/admin/orders', label: 'Orders', end: false },
   { to: '/admin/customers', label: 'Customers', end: false },
   { to: '/admin/audit-logs', label: 'Audit log', end: false },
@@ -14,6 +15,9 @@ export function AdminLayout() {
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       <aside className="bg-primary text-secondary md:w-60 md:shrink-0">
         <div className="flex h-16 items-center px-5">
           <Link to="/admin" className="text-headline-sm uppercase">
@@ -54,7 +58,7 @@ export function AdminLayout() {
           </div>
         )}
       </aside>
-      <main className="flex-1 bg-neutral">
+      <main id="main" tabIndex={-1} className="flex-1 bg-neutral">
         <Outlet />
       </main>
     </div>

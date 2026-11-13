@@ -33,7 +33,7 @@ function AddressCard({ address, onEdit }: { address: Address; onEdit: () => void
         )}
         <button
           type="button"
-          className="btn-tertiary text-body-sm text-error"
+          className="btn-tertiary text-body-sm text-error-strong"
           disabled={busy}
           onClick={() => {
             if (window.confirm('Delete this address? Past orders keep their own copy.')) remove.mutate(address.id);

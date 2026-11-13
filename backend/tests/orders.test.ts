@@ -158,3 +158,18 @@ describe('customer cancellation', () => {
     expect(late.body.error.code).toBe('ORDER_NOT_CANCELLABLE');
   });
 });
+
+describe('bodiless requests', () => {
+  it('accepts POST /cancel without a body (all fields optional)', async () => {
+    const order = await placeOrder();
+    const res = await request(app).post(`/api/orders/${order.id}/cancel`).set(authHeader(customer));
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('CANCELLED');
+  });
+
+  it('still rejects a bodiless POST when fields are required', async () => {
+    const order = await placeOrder();
+    const res = await request(app).post(`/api/orders/${order.id}/payment`).set(authHeader(customer));
+    expect(res.status).toBe(400);
+  });
+});
