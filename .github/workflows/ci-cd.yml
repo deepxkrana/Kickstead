@@ -101,7 +101,9 @@ jobs:
       contents: read
       packages: read
     env:
-      NEW_IMAGE: ${{ env.IMAGE }}:${{ github.sha }}
+      # Job-level env can't read the workflow `env` context, so build the name from `github`.
+      # Must match env.IMAGE above.
+      NEW_IMAGE: ghcr.io/${{ github.repository_owner }}/kickstead-api:${{ github.sha }}
       NAME: kickstead-api
       ENV_FILE: /opt/kickstead/.env
     steps:
