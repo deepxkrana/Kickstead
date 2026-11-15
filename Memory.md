@@ -17,7 +17,7 @@ Do not use this file as a replacement for source code, tests, or the product req
 | Delivery window | Deadline 2026-11-14 |
 | Primary users | Customer and Admin |
 | Product goal | Complete customer-to-order journey with safe inventory and admin operations |
-| Current phase | Phase 9 — Docs + deployment (in progress: files written, first deploy pending) |
+| Current phase | Phase 9 — Deployment (backend live on EC2 via CI/CD; Vercel frontend + prod auth URLs pending) |
 | Last updated | 2026-11-13 |
 
 ---
@@ -275,6 +275,34 @@ Next action:
 ### Phase history
 
 ```text
+## 2026-11-15 — Security review (qa-skills `security-testing`)
+
+Installed: `npx skills@1.8.1 add petrkindlmann/qa-skills` (vercel-labs CLI; repo MIT, inspected first: 50 markdown skills + 2 benign scripts) → project-level `.claude/skills/` (50 skills, copied) + `skills-lock.json`.
+
+Layers & results:
+- Secrets: full git history (9 commits) → 0 (no real keys, passwords, PEMs, JWTs, .env/.pem ever committed).
+- SCA (OSV API, every lockfile version): production 0 advisories. Upgraded vitest + @vitest/coverage-v8 3.2.7 → 4.1.12 → dev advisories 9 → 1 (removed 2 CRITICAL tinypool RCEs, vitest/mocker, glob, minimatch). Remaining: deepmerge-ts (Prisma CLI, dev-only, not in image) accepted.
+- SAST (Semgrep 1.182.1 in scratchpad venv; latest has no Intel-mac binary): 7 mutable action tags → pinned all actions to commit SHAs (checkout/setup-node v4.4.0, setup-buildx v3.12.0, login v3.7.0, build-push v6.19.2). 7 INFO helmet confirmations. 2 "hardcoded password" = public demo password (accepted; flagged risk).
+- Live probes vs production: all pass (A01/A02/A04/A05/A06/A10, Supabase RLS 0 rows + insert 401, EC2 only :80). alg:none token → Vercel firewall 403 (x-vercel-mitigated: deny), API direct → 401.
+- Auth tests: added alg:none + tampered-payload tests (204 total). Repo settings: fork PR approval all_external_contributors, GITHUB_TOKEN read-only.
+- Deliverable: docs/security.md (OWASP 2025 map, accepted risks, recommendations). ZAP/actionlint via Docker were blocked by the tool permission classifier.
+
+Key risk raised to user: public demo admin on public production — accepted for review, deactivate/rotate afterwards.
+
+## 2026-11-15 — Phase 9 (part 2): first automated deploy
+
+Status: backend deployed
+
+- Runner registered with default name/labels (ip-172-31-11-210; self-hosted,Linux,X64) and initially offline → deploy job queued. Changed deploy `runs-on` to [self-hosted, linux, x64]; removed `environment: production` (editor warning, not needed); fixed job-level env using `env.IMAGE` (invalid context).
+- First deploy failed: wrong DB credentials in /opt/kickstead/.env → Supabase pooler ECIRCUITBREAKER after repeated auth failures. Workflow now removes the failed container when there is no previous version (prevents health checks hammering the DB).
+- INCIDENT: a masking regex (`[^@]*`) printed the DB password in the conversation because the password contains '@'. Temp file deleted; user advised to reset the Supabase DB password to letters/digits only and update database/.env, backend/.env, GitHub secrets, /opt/kickstead/.env. 2026-11-15: user rotated the password (new value = old + one character; still contains '@'). Verified: new accepted, old rejected, local .env files + server + GitHub-secret-driven pipeline all working. Advised a fully random letters/digits password since both values were shared in the conversation; user's call.
+- Commit 268972d: CI/CD green end-to-end (test → publish → deploy). Container healthy on EC2; public http://13.201.19.151/api/health → ok/up.
+
+- Frontend live at https://kickstead.vercel.app (Vercel root frontend/; /api rewrite → EC2 verified; CSP/HSTS/XFO headers verified). User updated Supabase Site URL/Redirect URLs, Google JS origin, CLIENT_URL on server.
+- Runner was only online while `./run.sh` was open → installed as systemd service (actions.runner.deepxkrana-Kickstead.ip-172-31-11-210, enabled, runs as ubuntu). GitHub reports it online. Deploys now need no manual server action.
+
+Next: user browser test of demo + Google sign-in on production; optional permission to update Architecture.md/Rules.md (G1); final README status.
+
 ## 2026-11-14 — Phase 9 (part 1): EC2 + docs + pipeline files
 
 Status: partial

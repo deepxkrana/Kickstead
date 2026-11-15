@@ -8,3 +8,7 @@ coverage/
 .DS_Store
 .vite/
 !.env.*.example
+
+# Local AI-assistant tooling (Claude Code skills). Not needed to build, test or deploy the app.
+.claude/
+skills-lock.json

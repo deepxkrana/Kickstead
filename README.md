@@ -8,7 +8,7 @@ The focus is on correctness rather than feature count:
 - Repeating a checkout request never creates a second order.
 - Every permission check runs on the server.
 
-> **Status: in progress.** The customer journey, the admin side, the hardening and the test suite are complete (Phases 1–8 of 9): 202 tests, 98% line coverage. Remaining: API docs, the ER diagram and deployment. See [Project status](#project-status).
+> **Status: in progress.** The customer journey, the admin side, the hardening and the test suite are complete (Phases 1–8 of 9): 204 tests, 97% line coverage. Security review: [docs/security.md](docs/security.md). Remaining: API docs, the ER diagram and deployment. See [Project status](#project-status).
 
 ---
 
@@ -20,7 +20,7 @@ The focus is on correctness rather than feature count:
 | Backend | Node.js, Express 5, TypeScript, zod, Helmet |
 | Database | PostgreSQL on Supabase, Prisma 6 (ORM and migrations) |
 | Auth | Supabase Auth: Google sign-in, plus email/password for the demo accounts. The API verifies tokens with `jose`. |
-| Tests | Vitest, Supertest |
+| Tests | Vitest 4, Supertest |
 | Deployment | Backend in Docker on AWS EC2, frontend on Vercel, deployed by GitHub Actions *(final phase)* |
 
 ## Repository layout
@@ -174,7 +174,7 @@ Each run applies the migrations to `kickstead_test` and resets the tables betwee
 - runs Prisma from an empty temporary folder, so it can't read the real `.env` files,
 - checks the target host before migrating.
 
-Current tests: **202, all passing, 98.2% line coverage, 92% branch coverage** (`npm run test:coverage`). They cover:
+Current tests: **204, all passing, 97.4% line coverage** (Vitest 4) (`npm run test:coverage`). They cover:
 - **Pricing:** GST, the free-shipping threshold, tax rounding, and rejection of invalid amounts.
 - **Order statuses:** every allowed change succeeds and the disallowed ones are rejected.
 - **API errors:** the standard error format and security headers.
@@ -459,7 +459,7 @@ The demo customer has a saved delivery address in Mumbai. Running the seed again
 - The stock check when adding to the cart only gives early feedback. It doesn't reserve stock. Stock is reserved only when checkout places the order, and that is where the final check happens.
 - Product search uses case-insensitive substring matching (`ILIKE`), with no full-text ranking.
 - Rate limits are kept in memory, per server process. That's fine for the single EC2 instance. Running several instances would need a shared store such as Redis.
-- `npm audit` reports a high-severity advisory in `deepmerge-ts`. It's used only by the Prisma **CLI's** config loader, which npm pulls in as a peer of `@prisma/client`. The running server never calls it and never passes it user input. Fixing it needs a breaking upgrade to Prisma 7, so it's accepted for the MVP. Advisories in Vitest are dev-only.
+- `npm audit` reports a high-severity advisory in `deepmerge-ts`. It's used only by the Prisma **CLI's** config loader, which npm pulls in as a peer of `@prisma/client`. The running server never calls it and never passes it user input. Fixing it needs a breaking upgrade to Prisma 7, so it's accepted for the MVP. After the upgrade to Vitest 4, no other advisories remain.
 - New accounts are created through Google only. Supabase can't turn off email sign-up for some providers and leave it on for others, so someone could create an email/password account through Supabase's API. It would only ever be a `CUSTOMER`.
 - The Supabase session (access and refresh tokens) is kept in browser storage by the Supabase client, not in an HTTP-only cookie. The API accepts it as a Bearer token.
 - Roles are assigned at first sign-in. Adding an email to `ADMIN_EMAILS` later doesn't promote an existing customer.
@@ -480,6 +480,7 @@ docker run --env-file backend/.env -e NODE_ENV=production -p 4000:4000 kickstead
 | [docs/api.md](docs/api.md) | Endpoint reference: auth, request and response shapes, error codes, rate limits |
 | [docs/er-diagram.md](docs/er-diagram.md) | Mermaid ER diagram and the rules the database enforces |
 | [docs/deployment.md](docs/deployment.md) | EC2, GitHub Actions, Vercel and Supabase deployment runbook |
+| [docs/security.md](docs/security.md) | OWASP Top 10 (2025) security review: results, coverage map, accepted risks |
 | [PRD.md](PRD.md) | Product requirements and acceptance criteria |
 | [Architecture.md](Architecture.md) | System structure and technical decisions |
 | [Rules.md](Rules.md) | Implementation rules |

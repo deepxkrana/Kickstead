@@ -88,6 +88,24 @@ describe('Supabase token verifier', () => {
     await expectInvalid(hs, 'invalid');
   });
 
+  it('rejects an unsigned alg:none token (signature-stripping attack)', async () => {
+    const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const unsigned = `${b64({ alg: 'none', typ: 'JWT' })}.${b64({
+      sub: USER_ID,
+      email: 'admin@kickstead.dev',
+      iss: ISSUER,
+      aud: 'authenticated',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })}.`;
+    await expectInvalid(unsigned, 'invalid');
+  });
+
+  it('rejects a valid token whose payload was tampered with after signing', async () => {
+    const [header, , signature] = (await token()).split('.');
+    const forged = Buffer.from(JSON.stringify({ sub: USER_ID, email: 'admin@kickstead.dev', iss: ISSUER, aud: 'authenticated', exp: 9_999_999_999 })).toString('base64url');
+    await expectInvalid(`${header}.${forged}.${signature}`, 'invalid');
+  });
+
   it('rejects tokens without an email or a UUID subject', async () => {
     await expectInvalid(await token({ claims: { email: undefined } }), 'invalid');
     const badSub = await new SignJWT({ email: 'a@b.c' })
