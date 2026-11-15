@@ -36,12 +36,12 @@ The runner makes an **outgoing** connection to GitHub, so the instance needs **n
    ```bash
    cd ~/actions-runner
    ./config.sh --url https://github.com/<owner>/<repo> --token <TOKEN> \
-     --name kickstead-ec2 --labels kickstead-ec2 --unattended
+     --unattended
    sudo ./svc.sh install ubuntu     # run as a service, starting on boot, as the ubuntu user (in the docker group)
    sudo ./svc.sh start
    sudo ./svc.sh status             # should report active (running)
    ```
-3. Under **Settings → Actions → Runners**, the runner should show as **Idle** with the labels `self-hosted`, `linux`, `x64`, `kickstead-ec2`.
+3. Under **Settings → Actions → Runners**, the runner should show as **Idle** with the labels `self-hosted`, `Linux`, `X64` (the deploy job targets these).
 
 > **Public repository safety.** A self-hosted runner executes workflow code, and a pull request from a fork could edit the workflow to target it. Go to **Settings → Actions → General → "Approval for running fork pull request workflows from contributors"** and choose **"Require approval for all external contributors"**. The `deploy` job itself only runs on pushes to `main`.
 
