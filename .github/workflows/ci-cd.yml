@@ -149,6 +149,12 @@ jobs:
               echo "Rolling back to $PREVIOUS"
               start "$PREVIOUS"
               healthy && echo "Rollback healthy" || echo "::error::Rollback is also unhealthy"
+            else
+              # Nothing to roll back to (first deploy). Don't leave a failing container running:
+              # its health checks would keep retrying the database (e.g. tripping Supabase's
+              # auth-failure lockout when the password in $ENV_FILE is wrong).
+              echo "::error::No previous version to roll back to; stopping the failed container. Check $ENV_FILE."
+              docker rm -f "$NAME" >/dev/null 2>&1 || true
             fi
             exit 1
           fi
