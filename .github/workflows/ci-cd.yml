@@ -1,0 +1,155 @@
+name: CI/CD
+
+# Every push and pull request: typecheck, test (against a throwaway Postgres), build.
+# Pushes to main additionally: migrate Supabase → build & push the API image (GitHub-hosted)
+# → pull and swap the container on EC2 (self-hosted runner on the instance; no inbound SSH).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false # never cancel a deploy half-way
+
+env:
+  NODE_VERSION: 22
+  IMAGE: ghcr.io/${{ github.repository_owner }}/kickstead-api
+
+jobs:
+  test:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: kickstead_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Tests only ever run against this disposable database (the suite refuses supabase URLs).
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/kickstead_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  publish:
+    name: Migrate database, build and push image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --workspace database --include-workspace-root
+
+      # Schema first: migrations are additive, so the running API keeps working until the new one starts.
+      - name: Apply database migrations (Supabase)
+        working-directory: database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Runs ON the EC2 instance via a self-hosted runner, which connects out to GitHub.
+  # No inbound SSH is needed: the security group keeps port 22 limited to the admin's IP.
+  deploy:
+    name: Deploy on EC2 (self-hosted runner)
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, kickstead-ec2]
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NEW_IMAGE: ${{ env.IMAGE }}:${{ github.sha }}
+      NAME: kickstead-api
+      ENV_FILE: /opt/kickstead/.env
+    steps:
+      - name: Pull the new image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f "$ENV_FILE" || { echo "::error::Missing $ENV_FILE on the server"; exit 1; }
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin >/dev/null
+          docker pull "$NEW_IMAGE"
+          docker logout ghcr.io >/dev/null
+
+      - name: Swap the container (health check, automatic rollback)
+        run: |
+          set -euo pipefail
+          PREVIOUS=$(docker inspect --format '{{.Config.Image}}' "$NAME" 2>/dev/null || true)
+
+          start() {
+            docker rm -f "$NAME" >/dev/null 2>&1 || true
+            docker run -d --name "$NAME" --restart unless-stopped \
+              --env-file "$ENV_FILE" -p 80:4000 \
+              --memory 600m --log-opt max-size=10m --log-opt max-file=3 \
+              "$1" >/dev/null
+          }
+
+          healthy() {
+            for _ in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1/api/health >/dev/null; then return 0; fi
+              sleep 2
+            done
+            return 1
+          }
+
+          start "$NEW_IMAGE"
+          if healthy; then
+            echo "Deployed $NEW_IMAGE"
+            docker image prune -af --filter "until=168h" >/dev/null || true
+          else
+            echo "::error::New image failed its health check. Last log lines:"
+            docker logs --tail 50 "$NAME" || true
+            if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$NEW_IMAGE" ]; then
+              echo "Rolling back to $PREVIOUS"
+              start "$PREVIOUS"
+              healthy && echo "Rollback healthy" || echo "::error::Rollback is also unhealthy"
+            fi
+            exit 1
+          fi
+
+      - name: Health
+        run: curl -fsS http://127.0.0.1/api/health

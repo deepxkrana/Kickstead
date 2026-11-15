@@ -1,0 +1,17 @@
+# Keep the build context small and free of secrets.
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+.git
+.github
+*.md
+!backend/**/*.md
+frontend/src
+frontend/public
+frontend/index.html
+backend/tests
+**/.DS_Store

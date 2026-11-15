@@ -41,6 +41,9 @@ kickstead/
 │   │   ├── routes/      Admin router (every route admin-only)
 │   │   └── shared/      Errors, money calculations, order status rules
 │   └── tests/
+├── docs/                API reference, ER diagram, deployment runbook
+├── .github/workflows/   CI/CD pipeline
+├── Dockerfile           Production API image
 ├── frontend/            React app
 │   └── src/
 │       ├── api/         Shared API client (adds the login token to every request)
@@ -353,7 +356,9 @@ The database itself enforces the critical rules, so a bug in the application can
 - Orders store copies of the product name, price and delivery address, so later edits don't change past orders.
 - **Row-level security is on for every table.** Supabase's REST API is therefore closed to the browser's public key. Only the backend, connecting through Prisma, can read or write data.
 
-### API endpoints (so far)
+### API endpoints
+
+Summary below; full request and response shapes and error codes are in **[docs/api.md](docs/api.md)**.
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|
@@ -430,7 +435,7 @@ Every error response has the same shape:
 | 6 | Admin dashboard and operations | ✅ Done |
 | 7 | Security and reliability hardening | ✅ Done |
 | 8 | Test gap review and coverage | ✅ Done |
-| 9 | API docs, ER diagram, deployment | ⏳ Next |
+| 9 | API docs, ER diagram, deployment | 🔄 Docs and pipeline written; first deploy pending |
 
 ## Demo credentials
 
@@ -459,10 +464,22 @@ The demo customer has a saved delivery address in Mumbai. Running the seed again
 - The Supabase session (access and refresh tokens) is kept in browser storage by the Supabase client, not in an HTTP-only cookie. The API accepts it as a Bearer token.
 - Roles are assigned at first sign-in. Adding an email to `ADMIN_EMAILS` later doesn't promote an existing customer.
 
+## Deployment
+
+The backend runs as a Docker container on AWS EC2, the frontend on Vercel, and the database on Supabase. GitHub Actions tests every push. A push to `main` then migrates the database and builds the image on GitHub's runners. A self-hosted runner on the EC2 instance then pulls the image, swaps the container and checks its health, rolling back automatically if the check fails. No inbound SSH is needed. See **[docs/deployment.md](docs/deployment.md)** for setup, the required secrets and how to operate the server.
+
+```bash
+docker build -t kickstead-api .                                           # production image: 116 MB, no Prisma CLI or dev tools
+docker run --env-file backend/.env -e NODE_ENV=production -p 4000:4000 kickstead-api
+```
+
 ## Project documents
 
 | Document | Purpose |
 |---|---|
+| [docs/api.md](docs/api.md) | Endpoint reference: auth, request and response shapes, error codes, rate limits |
+| [docs/er-diagram.md](docs/er-diagram.md) | Mermaid ER diagram and the rules the database enforces |
+| [docs/deployment.md](docs/deployment.md) | EC2, GitHub Actions, Vercel and Supabase deployment runbook |
 | [PRD.md](PRD.md) | Product requirements and acceptance criteria |
 | [Architecture.md](Architecture.md) | System structure and technical decisions |
 | [Rules.md](Rules.md) | Implementation rules |

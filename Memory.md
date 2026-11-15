@@ -17,7 +17,7 @@ Do not use this file as a replacement for source code, tests, or the product req
 | Delivery window | Deadline 2026-11-14 |
 | Primary users | Customer and Admin |
 | Product goal | Complete customer-to-order journey with safe inventory and admin operations |
-| Current phase | Phase 8 — Test gap review (complete). Next: Phase 9 — Docs + deployment |
+| Current phase | Phase 9 — Docs + deployment (in progress: files written, first deploy pending) |
 | Last updated | 2026-11-13 |
 
 ---
@@ -197,11 +197,11 @@ None.
 - [x] Failed-payment test.
 - [x] Invalid-transition test.
 - [x] Authorization test.
-- [ ] README.
-- [ ] API documentation.
-- [ ] ER diagram.
+- [x] README.
+- [x] API documentation. (docs/api.md)
+- [x] ER diagram. (docs/er-diagram.md)
 - [x] Demo credentials. (seeded + in README)
-- [ ] Known limitations.
+- [x] Known limitations.
 - [x] Clean database setup verified. (fresh local DB: migrate + seed ×2, 2026-11-14)
 - [ ] Production build verified.
 - [ ] Walkthrough video prepared.
@@ -221,13 +221,16 @@ Phases 1–8 complete (planning, scaffold + database, auth, catalogue + cart, ch
 ### Current work
 
 ```text
-None — waiting for the user to start Phase 9.
+Phase 9: deployment files written; waiting on user for GitHub secrets, server .env, SG port 22, Vercel project.
 ```
 
 ### Next task
 
 ```text
-Phase 9 — docs/api.md, docs/er-diagram.md, Dockerfile (exclude Prisma CLI from runtime), GitHub Actions (tests with Postgres service container, build+push GHCR, deploy to EC2 via SSH), vercel.json (rewrites + security headers), Supabase/Google redirect URLs for production, update Architecture.md/Rules.md deviations (G1, with permission). Will need from user: GitHub repo, EC2 host/SSH access, Vercel project.
+1. Verify Docker image locally (needs Docker Desktop running) or via first CI run.
+2. User (step-by-step, does it themselves): install self-hosted runner on EC2 (label kickstead-ec2, service), set fork-PR approval to all external contributors, create /opt/kickstead/.env (no quotes), add GitHub secrets DATABASE_URL + DIRECT_URL, commit + push (user does git). SSH stays limited to user IP (user cannot/will not open 22 publicly).
+3. Vercel project (root frontend/, VITE_* env vars) → then Supabase Site URL/Redirect URLs, Google JS origin, CLIENT_URL on server.
+4. Ask permission: update Architecture.md/Rules.md for the Supabase Auth + Prisma deviations (decision G1).
 ```
 
 ### Blockers
@@ -272,6 +275,32 @@ Next action:
 ### Phase history
 
 ```text
+## 2026-11-14 — Phase 9 (part 1): EC2 + docs + pipeline files
+
+Status: partial
+
+Infrastructure (user, guided):
+- EC2 Ubuntu 24.04 t3.micro ap-south-1, Elastic IP 13.201.19.151, SG: 22 (user IP), 80 (anywhere). Docker 29.1.3, user in docker group, 2 GB swap (persistent), /opt/kickstead. SSH initially timed out: SG source IP mismatch / network (user's network also intercepts :80 with a proxy returning 502).
+- GitHub repo deepxkrana/Kickstead (public, default branch main).
+
+Files:
+- Dockerfile (3 stages: build → prod deps with --omit=dev and explicit removal of prisma CLI/@prisma/config → runtime node:22-bookworm-slim + openssl, non-root `node`, HEALTHCHECK, copies generated node_modules/.prisma incl. debian-openssl-3.0.x engine), .dockerignore.
+- .github/workflows/ci-cd.yml: test job (Postgres 16 service, npm ci, db:generate, typecheck, test, build) on push/PR; deploy job on main: prisma migrate deploy (secrets) → buildx push ghcr.io/<owner>/kickstead-api:{sha,latest} (GHA cache) → SSH (key secret, ssh-keyscan) → docker login with job GITHUB_TOKEN → pull → swap container (--env-file /opt/kickstead/.env, -p 80:4000, --memory 600m, log rotation) → health check loop → auto-rollback to previous image → prune; then public health check.
+- frontend/vercel.json: /api/:path* → http://13.201.19.151/api/:path*, SPA fallback, CSP (self, Google Fonts, https: images, *.supabase.co), XFO DENY, nosniff, Referrer-Policy, Permissions-Policy, immutable asset caching.
+- docs/api.md (full reference + error code table), docs/er-diagram.md (Mermaid + DB-enforced rules + indexes + ledger), docs/deployment.md (runbook, secrets, server .env, rollback, limitations). README links them.
+
+Validation:
+- vercel.json valid JSON; workflow valid YAML; deploy + remote heredoc scripts pass `bash -n` after YAML de-indentation (REMOTE terminator at column 0).
+- Docker image built and run locally (see below).
+
+Decisions:
+- User cannot open SSH to 0.0.0.0/0 → deploy via a self-hosted GitHub Actions runner on the EC2 instance (outbound only; matches original Q19 "github runner"). Jobs: test (GitHub-hosted) → publish (GitHub-hosted: migrate + build/push GHCR linux/amd64) → deploy (self-hosted: pull, swap, health, rollback). Secrets reduced to DATABASE_URL + DIRECT_URL.
+- Server env lives only on the host (/opt/kickstead/.env), never in CI.
+
+Docker image verified locally (2026-11-14):
+- Found: `--omit=dev` still installed the Prisma CLI tree (prisma, @prisma/config, c12, jiti, deepmerge-ts, typescript…) because they are "devOptional" in the lockfile (optional peers of @prisma/client); `--omit=peer` did not help. Fix: `npm ci --omit=dev --omit=optional` (lockfile has 0 purely-optional packages, so no runtime loss). Result: 116 MB, 92 packages, CLI tree absent, all runtime deps present.
+- Ran against Supabase: health ok, catalogue/search ok, admin 401, JWKS verification inside container ok, Docker HEALTHCHECK healthy, ~38 MB RAM, non-root `node`.
+
 ## 2026-11-14 — Phase 8: Test gap review
 
 Status: complete
