@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
 import { ErrorMessage } from '../../components/StateViews';
 import type { Address, AddressInput } from './types';
@@ -15,16 +15,30 @@ const FIELDS: { name: keyof AddressInput; label: string; autoComplete: string; o
 ];
 
 interface AddressFormProps {
-  initial?: Address;
+  initial?: Address | AddressInput;
   submitLabel: string;
   pending: boolean;
   error: Error | null;
   onSubmit: (input: AddressInput) => void;
+  secondaryAction?: {
+    label: string;
+    onClick: (input: AddressInput) => void;
+  };
   onCancel?: () => void;
 }
 
 /** Server validation messages are shown next to the matching field. */
-export function AddressForm({ initial, submitLabel, pending, error, onSubmit, onCancel }: AddressFormProps) {
+export function AddressForm({
+  initial,
+  submitLabel,
+  pending,
+  error,
+  onSubmit,
+  secondaryAction,
+  onCancel,
+}: AddressFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [values, setValues] = useState<AddressInput>({
     fullName: initial?.fullName ?? '',
     phone: initial?.phone ?? '',
@@ -44,13 +58,35 @@ export function AddressForm({ initial, submitLabel, pending, error, onSubmit, on
     }
   }
 
+  function buildPayload(): AddressInput {
+    return { ...values, line2: values.line2?.trim() ? values.line2 : undefined };
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSubmit({ ...values, line2: values.line2?.trim() ? values.line2 : undefined });
+    setLocalError(null);
+    onSubmit(buildPayload());
+  }
+
+  function handleSecondaryClick() {
+    if (!secondaryAction) return;
+    if (formRef.current && !formRef.current.reportValidity()) {
+      return;
+    }
+    if (!/^\+?[0-9][0-9 -]{6,18}[0-9]$/.test(values.phone.trim())) {
+      setLocalError('Enter a valid phone number.');
+      return;
+    }
+    if (!/^[A-Za-z0-9 -]{3,12}$/.test(values.postalCode.trim())) {
+      setLocalError('Enter a valid postal code.');
+      return;
+    }
+    setLocalError(null);
+    secondaryAction.onClick(buildPayload());
   }
 
   return (
-    <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit} noValidate>
+    <form ref={formRef} className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit} noValidate>
       {FIELDS.map((field) => {
         const message = fieldErrors.get(field.name);
         return (
@@ -89,9 +125,9 @@ export function AddressForm({ initial, submitLabel, pending, error, onSubmit, on
         </label>
       )}
 
-      {error && !fieldErrors.size && (
+      {(localError || (error && !fieldErrors.size)) && (
         <div className="sm:col-span-2">
-          <ErrorMessage>{error.message}</ErrorMessage>
+          <ErrorMessage>{localError ?? error?.message}</ErrorMessage>
         </div>
       )}
 
@@ -99,6 +135,11 @@ export function AddressForm({ initial, submitLabel, pending, error, onSubmit, on
         <button type="submit" className="btn-primary" disabled={pending}>
           {pending ? 'Saving…' : submitLabel}
         </button>
+        {secondaryAction && (
+          <button type="button" className="btn-secondary" onClick={handleSecondaryClick} disabled={pending}>
+            {secondaryAction.label}
+          </button>
+        )}
         {onCancel && (
           <button type="button" className="btn-secondary" onClick={onCancel} disabled={pending}>
             Cancel

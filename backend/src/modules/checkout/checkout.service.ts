@@ -7,6 +7,7 @@ import { calculateOrderTotals, lineTotalPaise } from '../../shared/money/pricing
 import { AuditAction, recordAudit } from '../audit/audit.service.js';
 import { reserveStock } from '../inventory/inventory.service.js';
 import { orderDetailInclude, toOrderView, type OrderView } from '../orders/orders.view.js';
+import type { CheckoutAddressInput } from './checkout.schemas.js';
 
 interface LockedProduct {
   id: string;
@@ -57,14 +58,55 @@ async function pendingOrderConflict(db: TransactionClient | typeof prisma, userI
  * Idempotency: the same customer + key always returns the original order. Enforced by
  * UNIQUE(user_id, idempotency_key); concurrent duplicates are caught and replayed.
  */
-export async function checkout(userId: string, addressId: string, idempotencyKey: string): Promise<CheckoutResult> {
+export async function checkout(
+  userId: string,
+  addressTarget: { addressId?: string; address?: CheckoutAddressInput },
+  idempotencyKey: string,
+): Promise<CheckoutResult> {
   const existing = await findByKey(prisma, userId, idempotencyKey);
   if (existing) return { order: toOrderView(existing), replayed: true };
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const address = await tx.address.findFirst({ where: { id: addressId, userId } });
-      if (!address) throw new AppError(404, 'ADDRESS_NOT_FOUND', 'Address not found.');
+      let addressSnapshot: {
+        fullName: string;
+        phone: string;
+        line1: string;
+        line2: string | null;
+        city: string;
+        state: string;
+        postalCode: string;
+        country: string;
+      };
+
+      if (addressTarget.addressId) {
+        const address = await tx.address.findFirst({ where: { id: addressTarget.addressId, userId } });
+        if (!address) throw new AppError(404, 'ADDRESS_NOT_FOUND', 'Address not found.');
+        addressSnapshot = {
+          fullName: address.fullName,
+          phone: address.phone,
+          line1: address.line1,
+          line2: address.line2,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode,
+          country: address.country,
+        };
+      } else if (addressTarget.address) {
+        const a = addressTarget.address;
+        addressSnapshot = {
+          fullName: a.fullName,
+          phone: a.phone,
+          line1: a.line1,
+          line2: a.line2 ?? null,
+          city: a.city,
+          state: a.state,
+          postalCode: a.postalCode,
+          country: a.country,
+        };
+      } else {
+        throw Errors.badRequest('Provide either addressId or address.');
+      }
 
       const cartItems = await tx.cartItem.findMany({
         where: { cart: { userId } },
@@ -125,16 +167,7 @@ export async function checkout(userId: string, addressId: string, idempotencyKey
           status: 'PLACED',
           idempotencyKey,
           currency: PRICING.currency,
-          addressSnapshot: {
-            fullName: address.fullName,
-            phone: address.phone,
-            line1: address.line1,
-            line2: address.line2,
-            city: address.city,
-            state: address.state,
-            postalCode: address.postalCode,
-            country: address.country,
-          },
+          addressSnapshot,
           ...totals,
           items: {
             create: lines.map(({ product, quantity }) => ({

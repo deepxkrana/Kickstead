@@ -9,8 +9,8 @@ export function createCheckoutRouter({ requireAuth }: AuthMiddleware, rateLimit:
 
   /** 201 for a new order; 200 + Idempotent-Replayed: true when the key was already used. */
   router.post('/', requireAuth, rateLimit, validate({ body: checkoutBody }), async (req, res) => {
-    const { addressId, idempotencyKey } = input(req, 'body', checkoutBody);
-    const { order, replayed } = await checkout(req.user!.id, addressId, idempotencyKey);
+    const { addressId, address, idempotencyKey } = input(req, 'body', checkoutBody);
+    const { order, replayed } = await checkout(req.user!.id, { addressId, address }, idempotencyKey);
     if (replayed) res.setHeader('Idempotent-Replayed', 'true');
     res.status(replayed ? 200 : 201).json({ data: order });
   });

@@ -6,6 +6,7 @@ import { orderApi } from '../api/orderApi';
 import { ErrorMessage, LoadingState, MessageState } from '../components/StateViews';
 import { AddressForm } from '../features/addresses/AddressForm';
 import { AddressText } from '../features/addresses/AddressText';
+import type { AddressInput } from '../features/addresses/types';
 import { useAddresses, useCreateAddress } from '../features/addresses/useAddresses';
 import { CART_KEY, useCart } from '../features/cart/useCart';
 import { formatPaise } from '../lib/money';
@@ -54,19 +55,27 @@ export function CheckoutPage() {
   const addresses = useAddresses();
   const createAddress = useCreateAddress();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [oneTimeAddress, setOneTimeAddress] = useState<AddressInput | null>(null);
   const [addingAddress, setAddingAddress] = useState(false);
+  const [cancelledEmptyForm, setCancelledEmptyForm] = useState(false);
 
   // One key per checkout attempt. Retrying after a network error reuses it, so the server
   // returns the original order instead of creating a second one.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
-    if (selectedId || !addresses.data?.length) return;
+    if (selectedId || oneTimeAddress || !addresses.data?.length) return;
     setSelectedId((addresses.data.find((a) => a.isDefault) ?? addresses.data[0])!.id);
-  }, [addresses.data, selectedId]);
+  }, [addresses.data, selectedId, oneTimeAddress]);
 
   const placeOrder = useMutation({
-    mutationFn: () => orderApi.checkout(selectedId!, idempotencyKey),
+    mutationFn: () => {
+      if (selectedId) {
+        return orderApi.checkout({ addressId: selectedId, idempotencyKey });
+      }
+      const { isDefault: _ignored, ...address } = oneTimeAddress!;
+      return orderApi.checkout({ address, idempotencyKey });
+    },
     onSuccess: (order) => {
       queryClient.setQueryData(['order', order.id], order);
       void queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -127,7 +136,8 @@ export function CheckoutPage() {
   }
 
   const { items, totals } = cart.data;
-  const showForm = addingAddress || addresses.data.length === 0;
+  const showForm = addingAddress || (addresses.data.length === 0 && !oneTimeAddress && !cancelledEmptyForm);
+  const hasSelectedAddress = Boolean(selectedId || oneTimeAddress);
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-9.5">
@@ -138,7 +148,7 @@ export function CheckoutPage() {
           <fieldset className="flex flex-col gap-4">
             <legend className="mb-4 text-headline-sm uppercase">1. Delivery address</legend>
 
-            {addresses.data.length > 0 && (
+            {(addresses.data.length > 0 || oneTimeAddress) && (
               <div className="grid gap-3 sm:grid-cols-2">
                 {addresses.data.map((address) => (
                   <label
@@ -152,11 +162,33 @@ export function CheckoutPage() {
                       name="address"
                       className="mt-1 size-4 accent-primary"
                       checked={selectedId === address.id}
-                      onChange={() => setSelectedId(address.id)}
+                      onChange={() => {
+                        setSelectedId(address.id);
+                        setOneTimeAddress(null);
+                      }}
                     />
                     <AddressText address={address} />
                   </label>
                 ))}
+                {oneTimeAddress && (
+                  <label
+                    className={`card flex cursor-pointer gap-3 transition-colors ${
+                      !selectedId ? 'border-primary ring-1 ring-primary' : 'hover:border-primary-40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="address"
+                      className="mt-1 size-4 accent-primary"
+                      checked={!selectedId}
+                      onChange={() => setSelectedId(null)}
+                    />
+                    <div className="flex flex-col gap-1">
+                      <span className="chip w-fit">This order only</span>
+                      <AddressText address={{ ...oneTimeAddress, line2: oneTimeAddress.line2 ?? null }} />
+                    </div>
+                  </label>
+                )}
               </div>
             )}
 
@@ -164,6 +196,7 @@ export function CheckoutPage() {
               <div className="card p-5">
                 <h2 className="mb-4 text-label-lg uppercase">New address</h2>
                 <AddressForm
+                  initial={oneTimeAddress ?? undefined}
                   submitLabel="Save and use this address"
                   pending={createAddress.isPending}
                   error={createAddress.error}
@@ -171,15 +204,38 @@ export function CheckoutPage() {
                     createAddress.mutate(input, {
                       onSuccess: (address) => {
                         setSelectedId(address.id);
+                        setOneTimeAddress(null);
                         setAddingAddress(false);
+                        setCancelledEmptyForm(false);
                       },
                     })
                   }
-                  onCancel={addresses.data.length > 0 ? () => setAddingAddress(false) : undefined}
+                  secondaryAction={{
+                    label: 'Use this address',
+                    onClick: (input) => {
+                      setOneTimeAddress(input);
+                      setSelectedId(null);
+                      setAddingAddress(false);
+                      setCancelledEmptyForm(false);
+                    },
+                  }}
+                  onCancel={() => {
+                    setAddingAddress(false);
+                    if (addresses.data.length === 0 && !oneTimeAddress) {
+                      setCancelledEmptyForm(true);
+                    }
+                  }}
                 />
               </div>
             ) : (
-              <button type="button" className="btn-tertiary self-start text-body-sm" onClick={() => setAddingAddress(true)}>
+              <button
+                type="button"
+                className="btn-tertiary self-start text-body-sm"
+                onClick={() => {
+                  setCancelledEmptyForm(false);
+                  setAddingAddress(true);
+                }}
+              >
                 + Add a new address
               </button>
             )}
@@ -230,12 +286,12 @@ export function CheckoutPage() {
           <button
             type="button"
             className="btn-primary mt-5 w-full"
-            disabled={!selectedId || placeOrder.isPending || showForm}
+            disabled={!hasSelectedAddress || placeOrder.isPending || showForm}
             onClick={() => placeOrder.mutate()}
           >
             {placeOrder.isPending ? 'Placing order…' : 'Place order'}
           </button>
-          {showForm && <p className="mt-2 text-caption text-primary-60">Save the address first.</p>}
+          {showForm && <p className="mt-2 text-caption text-primary-60">Choose an address option above first.</p>}
           {placeOrder.isError && (
             <div className="mt-4">
               <CheckoutError error={placeOrder.error} />
