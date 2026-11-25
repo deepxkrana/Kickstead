@@ -142,3 +142,13 @@
 .skip-link {
   @apply absolute top-2 left-2 z-50 -translate-y-20 rounded-md bg-secondary px-4 py-2 text-label-md text-primary uppercase ring-2 ring-primary focus:translate-y-0;
 }
+
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgb(0 0 0 / 0.5);
+}

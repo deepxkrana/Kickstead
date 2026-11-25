@@ -7,6 +7,7 @@ import { ErrorMessage, LoadingState, MessageState } from '../components/StateVie
 import { StatusBadge } from '../components/StatusBadge';
 import { AddressText } from '../features/addresses/AddressText';
 import { CART_KEY } from '../features/cart/useCart';
+import { DummyPaymentPanel } from '../features/orders/DummyPaymentPanel';
 import type { Order, PaymentOutcome } from '../features/orders/types';
 import { formatDateTime } from '../lib/format';
 import { formatPaise } from '../lib/money';
@@ -130,24 +131,17 @@ export function OrderDetailPage() {
         <div className="flex flex-col gap-7.5">
           {o.actions.canPay && (
             <section className="rounded-lg border-2 border-primary p-5" aria-labelledby="payment-heading">
-              <h2 id="payment-heading" className="text-headline-sm uppercase">
-                Simulated payment
+              <h2 id="payment-heading" className="mb-3 text-headline-sm uppercase">
+                Payment
               </h2>
-              <p className="mt-1 text-body-sm text-primary-60">
-                Demo gateway: no real money moves and no card details are collected. Choose an outcome.
-              </p>
-              <p className="mt-4 text-headline-md">{formatPaise(o.totals.totalPaise)}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" className="btn-primary" disabled={busy} onClick={() => pay.mutate('SUCCESS')}>
-                  {pay.isPending && pay.variables === 'SUCCESS' ? 'Processing…' : `Pay ${formatPaise(o.totals.totalPaise)}`}
-                </button>
-                <button type="button" className="btn-secondary" disabled={busy} onClick={() => pay.mutate('FAILED')}>
-                  Simulate failure
-                </button>
-                <button type="button" className="btn-secondary" disabled={busy} onClick={() => pay.mutate('CANCELLED')}>
-                  Cancel payment
-                </button>
-              </div>
+              <DummyPaymentPanel
+                orderNumber={o.orderNumber}
+                totalPaise={o.totals.totalPaise}
+                busy={busy}
+                pendingOutcome={pay.variables}
+                error={null}
+                onPay={(outcome) => pay.mutate(outcome)}
+              />
             </section>
           )}
 
