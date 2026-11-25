@@ -12,7 +12,7 @@ The focus is on correctness rather than feature count:
 
 ---
 
-## Tech stack
+## Tech stacks
 
 | Layer | Technology |
 |---|---|
