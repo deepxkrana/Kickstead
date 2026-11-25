@@ -114,6 +114,9 @@ jobs:
         run: |
           set -euo pipefail
           test -f "$ENV_FILE" || { echo "::error::Missing $ENV_FILE on the server"; exit 1; }
+          # Free space before pulling (keeps the currently running container's image for rollback).
+          docker image prune -af >/dev/null || true
+          find ~/actions-runner/_diag -type f -mtime +3 -delete 2>/dev/null || true
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin >/dev/null
           docker pull "$NEW_IMAGE"
           docker logout ghcr.io >/dev/null
@@ -142,7 +145,7 @@ jobs:
           start "$NEW_IMAGE"
           if healthy; then
             echo "Deployed $NEW_IMAGE"
-            docker image prune -af --filter "until=168h" >/dev/null || true
+            docker image prune -af >/dev/null || true
           else
             echo "::error::New image failed its health check. Last log lines:"
             docker logs --tail 50 "$NAME" || true
